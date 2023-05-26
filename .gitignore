@@ -17,6 +17,8 @@
 mono_crash.*
 
 # Build results
+build/
+build-int/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -396,3 +398,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Additional libs directory
+thirdparty/

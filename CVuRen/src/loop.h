@@ -7,6 +7,6 @@ static const uint32_t HEIGHT = 600;
 
 void initWindow();
 void mainloop();
-void clean();
+void cleanWindow();
 
 void run();

@@ -3,6 +3,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "vkthings.h"
+
 struct {
 	GLFWwindow* window;
 } WINDOW;
@@ -22,9 +24,8 @@ void mainloop() {
 	}
 }
 
-void clean() {
+void cleanWindow() {
 	glfwDestroyWindow(WINDOW.window);
-
 	glfwTerminate();
 }
 
@@ -32,5 +33,6 @@ void run() {
 	initWindow();
 	initVk();
 	mainloop();
-	clean();
+	cleanVk();
+	cleanWindow();
 }

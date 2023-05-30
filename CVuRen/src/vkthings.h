@@ -4,3 +4,4 @@
 
 void initVk();
 void createInstance();
+void cleanVk();

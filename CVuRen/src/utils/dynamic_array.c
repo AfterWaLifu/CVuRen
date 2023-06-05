@@ -2,14 +2,14 @@
 
 #include <string.h>
 
-#define mallok(type, i) (type)malloc(sizeof(type) * i)
+#define mallok(type, number) (type*)malloc(sizeof(type) * number)
 
 void dai_pushback(dynamic_array_int* dai, int item) {
-	int* new_one = mallok(int*, 1);
+	int* new_one = mallok(int, 1);
 	*new_one = item;
 
 	if (dai->length % 10 == 0) {
-		int** new_array = mallok(int**, dai->length + 10);
+		int** new_array = mallok(int*, dai->length + 10);
 		if (dai->array) {
 			for (size_t i = 0; i < dai->length; ++i) {
 				new_array[i] = dai->array[i];
@@ -28,7 +28,7 @@ void dai_popback(dynamic_array_int* dai) {
 		dai->array[dai->length - 1] = NULL;
 		--(dai->length);
 		if (dai->length && (dai->length % 10 == 0)) {
-			int** new_array = mallok(int**, dai->length);
+			int** new_array = mallok(int*, dai->length);
 			for (size_t i = 0; i < dai->length; ++i) {
 				new_array[i] = dai->array[i];
 			}
@@ -58,7 +58,7 @@ void dai_set(dynamic_array_int* dai, size_t position, int item) {
 
 void das_pushback(dynamic_array_string* dai, char* item) {
 	if (dai->length % 10 == 0) {
-		char** new_array = mallok(char**, dai->length + 10);
+		char** new_array = mallok(char*, dai->length + 10);
 		if (dai->array) {
 			for (size_t i = 0; i < dai->length; ++i) {
 				new_array[i] = dai->array[i];
@@ -76,7 +76,7 @@ void das_popback(dynamic_array_string* dai) {
 		free(dai->array[dai->length - 1]);
 		dai->array[dai->length - 1] = NULL;
 		if (dai->length && (dai->length % 10 == 0)) {
-			char** new_array = mallok(char**, dai->length);
+			char** new_array = mallok(char*, dai->length);
 			for (size_t i = 0; i < dai->length; ++i) {
 				new_array[i] = dai->array[i];
 			}

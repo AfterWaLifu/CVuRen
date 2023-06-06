@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #ifndef GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_VULKAN
@@ -10,6 +11,7 @@
 #endif
 
 #include "utils/dynamic_array.h"
+#include "utils/utils.h"
 
 #ifdef NDEBUG
 #define VALIDATION_LAYERS 0
@@ -17,14 +19,35 @@
 #define VALIDATION_LAYERS 1
 #endif
 
+//  PROTOTYPES
+void createInstance();
+//  DEVICES-RELATED
+void pickPhysicalDevice();
+bool isDeviceSuitable(VkPhysicalDevice device);
+//	VALIDATION THINGS
+uint32_t checkValidationLayersSupport();
+void getRequiredExtensions(dynamic_array_string* extensions);
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+void setupDebugMessenger();
+VkResult CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator);
+void DestroyDebugUtilsMessengerEXT(const VkAllocationCallbacks* pAllocator);
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo);
+
+
 struct {
     VkInstance instance;
+    VkPhysicalDevice physicalDevice;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
+//  FROM .H
 void initVk() {
     createInstance();
     setupDebugMessenger();
+    pickPhysicalDevice();
 }
 
 void cleanVk() {
@@ -33,11 +56,14 @@ void cleanVk() {
     }
     vkDestroyInstance(VULKAN.instance, NULL);
 }
+//  END OF .H
 
 void createInstance() {
     if (VALIDATION_LAYERS && !checkValidationLayersSupport()) {
         printf("validation layers requested, but not available");
     }
+
+    VULKAN.physicalDevice = VK_NULL_HANDLE;
 
     dynamic_array_string glfwExtensions = { NULL, 0 };
     getRequiredExtensions(&glfwExtensions);
@@ -45,7 +71,6 @@ void createInstance() {
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
     VkExtensionProperties* extensions = (VkExtensionProperties*)malloc(sizeof(VkExtensionProperties) * extensionCount);
-
     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions);
 
     VkApplicationInfo app = {
@@ -83,6 +108,43 @@ void createInstance() {
         fprintf(stderr, "error on creating vulkan instance\n");
     }
 }
+
+void pickPhysicalDevice() {
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(VULKAN.instance, &deviceCount, NULL);
+    
+    if (deviceCount == 0) {
+        c_throw("failed to find device with Vulkan support\n");
+        return;
+    }
+
+    VkPhysicalDevice* devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * deviceCount);
+    vkEnumeratePhysicalDevices(VULKAN.instance, &deviceCount, devices);
+
+    for (uint32_t i = 0; i < deviceCount; ++i) {
+        if (isDeviceSuitable(devices[i])) {
+            VULKAN.physicalDevice = devices[i];
+            break;
+        }
+    }
+    if (VULKAN.physicalDevice == VK_NULL_HANDLE) {
+        c_throw("failed to find suitable gpu");
+        return;
+    }
+
+}
+
+bool isDeviceSuitable(VkPhysicalDevice device) {
+    VkPhysicalDeviceProperties deviceProperties;
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+}
+
+
+//  VALIDATION THINGS IMPLEMENTATION
 
 uint32_t checkValidationLayersSupport() {
     uint32_t layerCount;

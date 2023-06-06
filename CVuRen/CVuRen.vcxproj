@@ -159,11 +159,13 @@
     <ClCompile Include="src\loop.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\utils\dynamic_array.c" />
+    <ClCompile Include="src\utils\utils.c" />
     <ClCompile Include="src\vkthings.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\loop.h" />
     <ClInclude Include="src\utils\dynamic_array.h" />
+    <ClInclude Include="src\utils\utils.h" />
     <ClInclude Include="src\vkthings.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

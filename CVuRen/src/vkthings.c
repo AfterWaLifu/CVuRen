@@ -19,11 +19,23 @@
 #define VALIDATION_LAYERS 1
 #endif
 
+struct {
+    VkInstance instance;
+    VkPhysicalDevice physicalDevice;
+    VkDebugUtilsMessengerEXT debugMessenger;
+} VULKAN;
+
+typedef struct {
+    uint32_t graphicsFamily;
+    bool itIs;
+} QueueFamilyIndices;
+
 //  PROTOTYPES
 void createInstance();
 //  DEVICES-RELATED
 void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
 void getRequiredExtensions(dynamic_array_string* extensions);
@@ -35,13 +47,6 @@ VkResult CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessengerCreateInfoEXT* 
     const VkAllocationCallbacks* pAllocator);
 void DestroyDebugUtilsMessengerEXT(const VkAllocationCallbacks* pAllocator);
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo);
-
-
-struct {
-    VkInstance instance;
-    VkPhysicalDevice physicalDevice;
-    VkDebugUtilsMessengerEXT debugMessenger;
-} VULKAN;
 
 //  FROM .H
 void initVk() {
@@ -139,10 +144,30 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+    QueueFamilyIndices qfi = findQueueFamilies(device);
 
-    return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && qfi.itIs;
 }
 
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+{
+    QueueFamilyIndices qfi = {UINT32_MAX};
+    
+    uint32_t qCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &qCount, NULL);
+    VkQueueFamilyProperties* queueFamilies = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties)*qCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &qCount, queueFamilies);
+
+    for (uint32_t i = 0; i < qCount; ++i) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            qfi.graphicsFamily = i;
+            qfi.itIs = true;
+            break;
+        }
+    }
+    
+    return qfi;
+}
 
 //  VALIDATION THINGS IMPLEMENTATION
 

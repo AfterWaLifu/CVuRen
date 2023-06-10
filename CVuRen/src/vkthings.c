@@ -19,13 +19,15 @@
 #define VALIDATION_LAYERS 1
 #endif
 
-struct {
+struct VULKAN {
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
+    VkDevice device;
+    VkQueue graphicsQueue;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
-typedef struct {
+typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
     bool itIs;
 } QueueFamilyIndices;
@@ -36,6 +38,7 @@ void createInstance();
 void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+void createLogicalDevice();
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
 void getRequiredExtensions(dynamic_array_string* extensions);
@@ -53,9 +56,10 @@ void initVk() {
     createInstance();
     setupDebugMessenger();
     pickPhysicalDevice();
+    createLogicalDevice();
 }
-
 void cleanVk() {
+    vkDestroyDevice(VULKAN.device, NULL);
     if (VALIDATION_LAYERS) {
         DestroyDebugUtilsMessengerEXT(NULL);
     }
@@ -167,6 +171,47 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
     }
     
     return qfi;
+}
+
+void createLogicalDevice() {
+    QueueFamilyIndices indices = findQueueFamilies(VULKAN.physicalDevice);
+
+    const float qPriority = 1.0;
+    VkDeviceQueueCreateInfo queueCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .queueFamilyIndex = indices.graphicsFamily,
+        .queueCount = 1,
+        .pQueuePriorities = &qPriority
+    };
+
+    VkDeviceCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .queueCreateInfoCount = 1,
+        .pQueueCreateInfos = &queueCreateInfo,
+        .enabledLayerCount = 0,
+        .ppEnabledLayerNames = NULL,
+        .enabledExtensionCount = 0,
+        .ppEnabledExtensionNames = NULL,
+        .pEnabledFeatures = NULL
+    };
+
+    char** layersNames = malloc(sizeof(char*));
+    char name[] = { "VK_LAYER_KHRONOS_validation" };
+    layersNames[0] = name;
+    if (VALIDATION_LAYERS) {
+        createInfo.enabledLayerCount = 1;
+        createInfo.ppEnabledLayerNames = layersNames;
+    }
+    
+    if (vkCreateDevice(VULKAN.physicalDevice, &createInfo, NULL, &VULKAN.device)) {
+        c_throw("failed to create logical device");
+    }
+
+    vkGetDeviceQueue(VULKAN.device, indices.graphicsFamily, 0, &VULKAN.graphicsQueue);
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

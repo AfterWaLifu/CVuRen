@@ -3,13 +3,13 @@
 #include <stdlib.h>
 
 /* dynamic array structure for int's */
-typedef struct {
+typedef struct dynamic_array_int {
 	int** array;
 	size_t length;
 } dynamic_array_int;
 
 /* dynamic array structure for cstrings */
-typedef struct {
+typedef struct dynamic_array_string {
 	char** array;
 	size_t length;
 } dynamic_array_string;

@@ -5,10 +5,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#ifndef GLFW_INCLUDE_VULKAN
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#endif
+#include "window.h"
 
 #include "utils/dynamic_array.h"
 #include "utils/utils.h"
@@ -21,6 +18,7 @@
 
 struct VULKAN {
     VkInstance instance;
+    VkSurfaceKHR surface;
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     VkQueue graphicsQueue;
@@ -34,6 +32,7 @@ typedef struct QueueFamilyIndices {
 
 //  PROTOTYPES
 void createInstance();
+void createSurface();
 //  DEVICES-RELATED
 void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
@@ -55,6 +54,7 @@ void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* create
 void initVk() {
     createInstance();
     setupDebugMessenger();
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
 }
@@ -63,6 +63,7 @@ void cleanVk() {
     if (VALIDATION_LAYERS) {
         DestroyDebugUtilsMessengerEXT(NULL);
     }
+    vkDestroySurfaceKHR(VULKAN.instance, VULKAN.surface, NULL);
     vkDestroyInstance(VULKAN.instance, NULL);
 }
 //  END OF .H
@@ -118,6 +119,12 @@ void createInstance() {
     }
 }
 
+void createSurface() {
+    if (glfwCreateWindowSurface(VULKAN.instance, WINDOW.window, NULL, &(VULKAN.surface)) != VK_SUCCESS) {
+        c_throw("failed to create window surface\n");
+    }
+}
+
 void pickPhysicalDevice() {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(VULKAN.instance, &deviceCount, NULL);
@@ -137,7 +144,7 @@ void pickPhysicalDevice() {
         }
     }
     if (VULKAN.physicalDevice == VK_NULL_HANDLE) {
-        c_throw("failed to find suitable gpu");
+        c_throw("failed to find suitable gpu\n");
         return;
     }
 
@@ -208,7 +215,7 @@ void createLogicalDevice() {
     }
     
     if (vkCreateDevice(VULKAN.physicalDevice, &createInfo, NULL, &VULKAN.device)) {
-        c_throw("failed to create logical device");
+        c_throw("failed to create logical device\n");
     }
 
     vkGetDeviceQueue(VULKAN.device, indices.graphicsFamily, 0, &VULKAN.graphicsQueue);

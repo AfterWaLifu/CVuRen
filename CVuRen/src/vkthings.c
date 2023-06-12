@@ -22,11 +22,13 @@ struct VULKAN {
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     VkQueue graphicsQueue;
+    VkQueue presentQueue;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
 typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
+    uint32_t presentFamily;
     bool itIs;
 } QueueFamilyIndices;
 
@@ -162,43 +164,53 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
 
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
 {
-    QueueFamilyIndices qfi = {UINT32_MAX};
+    QueueFamilyIndices qfi = {UINT32_MAX, UINT32_MAX, false};
     
-    uint32_t qCount;
+    uint32_t qCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &qCount, NULL);
     VkQueueFamilyProperties* queueFamilies = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties)*qCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &qCount, queueFamilies);
 
+    VkBool32 presentSupport = VK_FALSE;
     for (uint32_t i = 0; i < qCount; ++i) {
         if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             qfi.graphicsFamily = i;
+        }
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, VULKAN.surface, &presentSupport);
+        if (presentSupport) {
+            qfi.presentFamily = i;
+        }
+        if (qfi.graphicsFamily != UINT32_MAX && qfi.presentFamily != UINT32_MAX) {
             qfi.itIs = true;
             break;
         }
     }
-    
     return qfi;
 }
 
 void createLogicalDevice() {
     QueueFamilyIndices indices = findQueueFamilies(VULKAN.physicalDevice);
 
+#define QUEUES_COUNT 2
+    VkDeviceQueueCreateInfo queueCreateInfos[QUEUES_COUNT];
+    uint32_t uniquiQueueFamilies[QUEUES_COUNT] = {indices.graphicsFamily, indices.presentFamily};
+
     const float qPriority = 1.0;
-    VkDeviceQueueCreateInfo queueCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .queueFamilyIndex = indices.graphicsFamily,
-        .queueCount = 1,
-        .pQueuePriorities = &qPriority
-    };
+    for (int i = 0; i < QUEUES_COUNT; ++i) {
+        queueCreateInfos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfos[i].pNext = NULL;
+        queueCreateInfos[i].flags = 0;
+        queueCreateInfos[i].queueFamilyIndex = uniquiQueueFamilies[i];
+        queueCreateInfos[i].queueCount = 1;
+        queueCreateInfos[i].pQueuePriorities = &qPriority;
+    }
 
     VkDeviceCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queueCreateInfo,
+        .queueCreateInfoCount = QUEUES_COUNT,
+        .pQueueCreateInfos = queueCreateInfos,
         .enabledLayerCount = 0,
         .ppEnabledLayerNames = NULL,
         .enabledExtensionCount = 0,
@@ -219,6 +231,7 @@ void createLogicalDevice() {
     }
 
     vkGetDeviceQueue(VULKAN.device, indices.graphicsFamily, 0, &VULKAN.graphicsQueue);
+    vkGetDeviceQueue(VULKAN.device, indices.presentFamily, 0, &VULKAN.presentQueue);
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

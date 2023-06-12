@@ -173,8 +173,9 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
 
     VkBool32 presentSupport = VK_FALSE;
     for (uint32_t i = 0; i < qCount; ++i) {
-        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        if (qfi.graphicsFamily == UINT32_MAX && queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             qfi.graphicsFamily = i;
+            continue;
         }
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, VULKAN.surface, &presentSupport);
         if (presentSupport) {

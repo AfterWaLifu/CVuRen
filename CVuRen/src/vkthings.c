@@ -16,7 +16,7 @@
 #define VALIDATION_LAYERS 1
 #endif
 
-struct VULKAN {
+static struct VULKAN {
     VkInstance instance;
     VkSurfaceKHR surface;
     VkPhysicalDevice physicalDevice;
@@ -25,6 +25,12 @@ struct VULKAN {
     VkQueue presentQueue;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
+
+#ifdef NDEBUG
+const char** validationLayers = NULL;
+#else
+const char** validationLayers = { "VK_LAYER_KHRONOS_validation" };
+#endif
 
 typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
@@ -106,12 +112,9 @@ void createInstance() {
     };
 
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-    char** layersNames = malloc(sizeof(char*));
-    char name[] = { "VK_LAYER_KHRONOS_validation" };
-    layersNames[0] = name;
     if (VALIDATION_LAYERS) {
-        inst_info.enabledLayerCount = 1;
-        inst_info.ppEnabledLayerNames = layersNames;
+        inst_info.enabledLayerCount = VALIDATION_LAYERS;
+        inst_info.ppEnabledLayerNames = validationLayers;
         populateDebugMessengerCreateInfo(&debugCreateInfo);
         inst_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
     }
@@ -219,12 +222,9 @@ void createLogicalDevice() {
         .pEnabledFeatures = NULL
     };
 
-    char** layersNames = malloc(sizeof(char*));
-    char name[] = { "VK_LAYER_KHRONOS_validation" };
-    layersNames[0] = name;
     if (VALIDATION_LAYERS) {
-        createInfo.enabledLayerCount = 1;
-        createInfo.ppEnabledLayerNames = layersNames;
+        createInfo.enabledLayerCount = VALIDATION_LAYERS;
+        createInfo.ppEnabledLayerNames = validationLayers;
     }
     
     if (vkCreateDevice(VULKAN.physicalDevice, &createInfo, NULL, &VULKAN.device)) {
@@ -245,10 +245,12 @@ uint32_t checkValidationLayersSupport() {
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
 
     int found = 0;
-    for (uint32_t j = 0; j < layerCount; ++j) {
-        if (strcmp("VK_LAYER_KHRONOS_validation", availableLayers[j].layerName) == 0) {
-            found = 1;
-            break;
+    for (int i = 0; i < VALIDATION_LAYERS; ++i) {
+        for (uint32_t j = 0; j < layerCount; ++j) {
+            if (strcmp(validationLayers[i], availableLayers[j].layerName) == 0) {
+                found = 1;
+                break;
+            }
         }
     }
     if (!found) return 0;

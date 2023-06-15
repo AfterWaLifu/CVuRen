@@ -29,8 +29,11 @@ static struct VULKAN {
 #ifdef NDEBUG
 const char** validationLayers = NULL;
 #else
-const char** validationLayers = { "VK_LAYER_KHRONOS_validation" };
+const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation\0"};
 #endif
+
+const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const uint32_t deviceExtensionsCount = 1;
 
 typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
@@ -46,6 +49,7 @@ void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 void createLogicalDevice();
+bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
 void getRequiredExtensions(dynamic_array_string* extensions);
@@ -161,8 +165,10 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
     QueueFamilyIndices qfi = findQueueFamilies(device);
+    bool deviceExtSupported = checkDeviceExtensionSupport(device);
 
-    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && qfi.itIs;
+    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
+        qfi.itIs && deviceExtSupported;
 }
 
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
@@ -235,6 +241,27 @@ void createLogicalDevice() {
     vkGetDeviceQueue(VULKAN.device, indices.presentFamily, 0, &VULKAN.presentQueue);
 }
 
+bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+    uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
+    VkExtensionProperties* availableExtensions = malloc(sizeof(VkExtensionProperties) * extensionCount);
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, availableExtensions);
+
+    bool found = false;
+    for (uint32_t i = 0; i < deviceExtensionsCount; ++i) {
+        for (uint32_t j = 0; j < extensionCount; ++j) {
+            if (strcmp(deviceExtensions[i], availableExtensions[j].extensionName) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
 //  VALIDATION THINGS IMPLEMENTATION
 
 uint32_t checkValidationLayersSupport() {
@@ -252,8 +279,8 @@ uint32_t checkValidationLayersSupport() {
                 break;
             }
         }
+        if (!found) return 0;
     }
-    if (!found) return 0;
 
     return layerCount;
 }
@@ -272,9 +299,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
-    fprintf(stderr, "\nValidation layer:");
-    fprintf(stderr, pCallbackData->pMessage);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\n| Validation layer |\n%s\n", pCallbackData->pMessage);
     return VK_FALSE;
 }
 

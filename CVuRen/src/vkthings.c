@@ -41,15 +41,22 @@ typedef struct QueueFamilyIndices {
     bool itIs;
 } QueueFamilyIndices;
 
+typedef struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR* capabilities;
+    VkSurfaceFormatKHR* formats;
+    VkPresentModeKHR* presentModes;
+    uint32_t formatsCount, presentModesCount;
+} SwapChainSupportDetails;
+
 //  PROTOTYPES
 void createInstance();
 void createSurface();
-//  DEVICES-RELATED
 void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 void createLogicalDevice();
 bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
 void getRequiredExtensions(dynamic_array_string* extensions);
@@ -166,9 +173,11 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
     QueueFamilyIndices qfi = findQueueFamilies(device);
     bool deviceExtSupported = checkDeviceExtensionSupport(device);
+    SwapChainSupportDetails scsd = querySwapChainSupport(device);
+    bool swapchainOk = (scsd.formatsCount > 0) && (scsd.presentModesCount>0);
 
     return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
-        qfi.itIs && deviceExtSupported;
+        qfi.itIs && deviceExtSupported && swapchainOk;
 }
 
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
@@ -260,6 +269,27 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
         }
     }
     return true;
+}
+
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+    SwapChainSupportDetails details = {NULL,NULL,NULL,0,0};
+
+    details.capabilities = (VkSurfaceCapabilitiesKHR*)malloc(sizeof(VkSurfaceCapabilitiesKHR));
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, VULKAN.surface, details.capabilities);
+
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, VULKAN.surface, &details.formatsCount, NULL);
+    if (details.formatsCount) {
+        details.formats = (VkSurfaceFormatKHR*)malloc(sizeof(VkSurfaceFormatKHR) * details.formatsCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, VULKAN.surface, &details.formatsCount, details.formats);
+    }
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, VULKAN.surface, &details.presentModesCount, NULL);
+    if (details.presentModesCount) {
+        details.presentModes = (VkPresentModeKHR*)malloc(sizeof(VkPresentModeKHR) * details.formatsCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, VULKAN.surface,
+            &details.presentModesCount, details.presentModes);
+    }
+
+    return details;
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

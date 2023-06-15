@@ -23,6 +23,7 @@ static struct VULKAN {
     VkDevice device;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
+    VkSwapchainKHR swapchain;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -51,12 +52,18 @@ typedef struct SwapChainSupportDetails {
 //  PROTOTYPES
 void createInstance();
 void createSurface();
+void createSwapChain();
+
 void pickPhysicalDevice();
 bool isDeviceSuitable(VkPhysicalDevice device);
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 void createLogicalDevice();
 bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const VkSurfaceFormatKHR* formats, uint32_t count);
+VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t count);
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
+
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
 void getRequiredExtensions(dynamic_array_string* extensions);
@@ -76,8 +83,10 @@ void initVk() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+    createSwapChain();
 }
 void cleanVk() {
+    vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
     vkDestroyDevice(VULKAN.device, NULL);
     if (VALIDATION_LAYERS) {
         DestroyDebugUtilsMessengerEXT(NULL);
@@ -138,6 +147,48 @@ void createInstance() {
 void createSurface() {
     if (glfwCreateWindowSurface(VULKAN.instance, WINDOW.window, NULL, &(VULKAN.surface)) != VK_SUCCESS) {
         c_throw("failed to create window surface\n");
+    }
+}
+
+void createSwapChain() {
+    SwapChainSupportDetails scsd = querySwapChainSupport(VULKAN.physicalDevice);
+
+    VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(scsd.formats, scsd.formatsCount);
+    VkPresentModeKHR presentMode = chooseSwapPresentMode(scsd.presentModes, scsd.presentModesCount);
+    VkExtent2D extent = chooseSwapExtent(scsd.capabilities);
+    uint32_t imageCount = scsd.capabilities->minImageCount + 1;
+
+    if (scsd.capabilities->maxImageCount > 0 && imageCount > scsd.capabilities->maxImageCount) {
+        imageCount = scsd.capabilities->maxImageCount;
+    }
+
+    QueueFamilyIndices indices = findQueueFamilies(VULKAN.physicalDevice);
+    uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
+    bool qGraphNEQPresent = indices.graphicsFamily != indices.presentFamily;
+
+    VkSwapchainCreateInfoKHR createInfo = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext = NULL,
+        .flags = 0,
+        .surface = VULKAN.surface,
+        .minImageCount = imageCount,
+        .imageFormat = surfaceFormat.format,
+        .imageColorSpace = surfaceFormat.colorSpace,
+        .imageExtent = extent,
+        .imageArrayLayers = 1,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode = qGraphNEQPresent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = qGraphNEQPresent ? 2 : 0,
+        .pQueueFamilyIndices = qGraphNEQPresent ? queueFamilyIndices : NULL,
+        .preTransform = scsd.capabilities->currentTransform,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = presentMode,
+        .clipped = VK_TRUE,
+        .oldSwapchain = VK_NULL_HANDLE
+    };
+
+    if (vkCreateSwapchainKHR(VULKAN.device, &createInfo, NULL, &VULKAN.swapchain) != VK_SUCCESS) {
+        c_throw("failed to create swapchain");
     }
 }
 
@@ -290,6 +341,43 @@ SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
     }
 
     return details;
+}
+
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const VkSurfaceFormatKHR* formats, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if ((formats[i].format == VK_FORMAT_B8G8R8A8_SRGB) &&
+            (formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)) {
+            return formats[i];
+        }
+    }
+    return formats[0];
+}
+
+VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return modes[i];
+        }
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities) {
+    if (capabilities->currentExtent.width != UINT32_MAX) {
+        return capabilities->currentExtent;
+    } else {
+        int width, height;
+        glfwGetFramebufferSize(WINDOW.window, &width, &height);
+
+        VkExtent2D actualExtent = {
+            (uint32_t)width, (uint32_t)height
+        };
+        actualExtent.width = u32_clamp(actualExtent.width, 
+            capabilities->minImageExtent.width, capabilities->maxImageExtent.width);
+        actualExtent.height = u32_clamp(actualExtent.height,
+            capabilities->minImageExtent.height, capabilities->maxImageExtent.height);
+        return actualExtent;
+    }
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

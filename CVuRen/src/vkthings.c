@@ -223,8 +223,8 @@ void createLogicalDevice() {
         .pQueueCreateInfos = queueCreateInfos,
         .enabledLayerCount = 0,
         .ppEnabledLayerNames = NULL,
-        .enabledExtensionCount = 0,
-        .ppEnabledExtensionNames = NULL,
+        .enabledExtensionCount = deviceExtensionsCount,
+        .ppEnabledExtensionNames = deviceExtensions,
         .pEnabledFeatures = NULL
     };
 

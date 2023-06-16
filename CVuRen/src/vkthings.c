@@ -24,6 +24,9 @@ static struct VULKAN {
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     VkSwapchainKHR swapchain;
+    VkImage* swapchainImages;
+    VkFormat swapchainImageFormat;
+    VkExtent2D swapchainExtent;
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -190,6 +193,12 @@ void createSwapChain() {
     if (vkCreateSwapchainKHR(VULKAN.device, &createInfo, NULL, &VULKAN.swapchain) != VK_SUCCESS) {
         c_throw("failed to create swapchain");
     }
+
+    vkGetSwapchainImagesKHR(VULKAN.device, VULKAN.swapchain, &imageCount, NULL);
+    VULKAN.swapchainImages = (VkImage*)malloc(sizeof(VkImage) * imageCount);
+
+    VULKAN.swapchainImageFormat = surfaceFormat.format;
+    VULKAN.swapchainExtent = extent;
 }
 
 void pickPhysicalDevice() {

@@ -26,11 +26,11 @@ static struct VULKAN {
     
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-    vkimages swapchainImages;
     VkSwapchainKHR swapchain;
     
     VkFormat swapchainImageFormat;
     VkExtent2D swapchainExtent;
+    vkimages swapchainImages;
     vkimageviews swapchainImageViews;
 
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -73,6 +73,7 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const VkSurfaceFormatKHR* formats, ui
 VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t count);
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
 void createImageViews();
+void createGraphicsPipeline();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -95,6 +96,7 @@ void initVk() {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createGrapicsPipeline();
 }
 void cleanVk() {
     for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
@@ -432,6 +434,10 @@ void createImageViews() {
             c_throw("failed to create image views");
         }
     }
+}
+
+void createGraphicsPipeline() {
+
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

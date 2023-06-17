@@ -167,6 +167,7 @@
     <ClInclude Include="src\loop.h" />
     <ClInclude Include="src\utils\dynamic_array.h" />
     <ClInclude Include="src\utils\utils.h" />
+    <ClInclude Include="src\vkstructs.h" />
     <ClInclude Include="src\vkthings.h" />
     <ClInclude Include="src\window.h" />
   </ItemGroup>

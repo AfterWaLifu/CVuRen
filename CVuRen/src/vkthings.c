@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "window.h"
+#include "vkstructs.h"
 
 #include "utils/dynamic_array.h"
 #include "utils/utils.h"
@@ -19,14 +20,19 @@
 static struct VULKAN {
     VkInstance instance;
     VkSurfaceKHR surface;
+    
     VkPhysicalDevice physicalDevice;
     VkDevice device;
+    
     VkQueue graphicsQueue;
     VkQueue presentQueue;
+    vkimages swapchainImages;
     VkSwapchainKHR swapchain;
-    VkImage* swapchainImages;
+    
     VkFormat swapchainImageFormat;
     VkExtent2D swapchainExtent;
+    vkimageviews swapchainImageViews;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -66,6 +72,7 @@ SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(const VkSurfaceFormatKHR* formats, uint32_t count);
 VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t count);
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
+void createImageViews();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -87,8 +94,12 @@ void initVk() {
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapChain();
+    createImageViews();
 }
 void cleanVk() {
+    for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
+        vkDestroyImageView(VULKAN.device, VULKAN.swapchainImageViews.swapChainImageViews[i], NULL);
+    }
     vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
     vkDestroyDevice(VULKAN.device, NULL);
     if (VALIDATION_LAYERS) {
@@ -194,8 +205,9 @@ void createSwapChain() {
         c_throw("failed to create swapchain");
     }
 
-    vkGetSwapchainImagesKHR(VULKAN.device, VULKAN.swapchain, &imageCount, NULL);
-    VULKAN.swapchainImages = (VkImage*)malloc(sizeof(VkImage) * imageCount);
+    vkGetSwapchainImagesKHR(VULKAN.device, VULKAN.swapchain, &VULKAN.swapchainImages.count, NULL);
+    VULKAN.swapchainImages.swapchainImages = (VkImage*)malloc(sizeof(VkImage) * VULKAN.swapchainImages.count);
+    vkGetSwapchainImagesKHR(VULKAN.device, VULKAN.swapchain, &VULKAN.swapchainImages.count, VULKAN.swapchainImages.swapchainImages);
 
     VULKAN.swapchainImageFormat = surfaceFormat.format;
     VULKAN.swapchainExtent = extent;
@@ -386,6 +398,39 @@ VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities) {
         actualExtent.height = u32_clamp(actualExtent.height,
             capabilities->minImageExtent.height, capabilities->maxImageExtent.height);
         return actualExtent;
+    }
+}
+
+void createImageViews() {
+    VULKAN.swapchainImageViews.count = VULKAN.swapchainImages.count;
+    VULKAN.swapchainImageViews.swapChainImageViews = 
+        (VkImageView*)malloc(sizeof(VkImageView) * VULKAN.swapchainImageViews.count);
+
+    for (uint32_t i = 0; i < VULKAN.swapchainImages.count; ++i) {
+        VkImageViewCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .image = VULKAN.swapchainImages.swapchainImages[i],
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = VULKAN.swapchainImageFormat,
+            .components = {
+                VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY,
+                VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        };
+
+        if (vkCreateImageView(VULKAN.device, &createInfo, NULL,
+            VULKAN.swapchainImageViews.swapChainImageViews+i) != VK_SUCCESS) {
+            c_throw("failed to create image views");
+        }
     }
 }
 

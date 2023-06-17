@@ -401,3 +401,6 @@ FodyWeavers.xsd
 
 # Additional libs directory
 thirdparty/
+
+# Compiled shaders files
+*.spv

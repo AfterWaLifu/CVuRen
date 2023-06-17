@@ -11,3 +11,8 @@ typedef struct vkimageviews {
 	VkImageView* swapChainImageViews;
 	uint32_t count;
 } vkimageviews;
+
+typedef struct shaderfile {
+	char* file;
+	size_t size;
+} shaderfile;

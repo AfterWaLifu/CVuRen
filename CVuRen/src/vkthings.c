@@ -74,6 +74,7 @@ VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t c
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
 void createImageViews();
 void createGraphicsPipeline();
+shaderfile readFile();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -96,7 +97,7 @@ void initVk() {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
-    createGrapicsPipeline();
+    createGraphicsPipeline();
 }
 void cleanVk() {
     for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
@@ -437,7 +438,28 @@ void createImageViews() {
 }
 
 void createGraphicsPipeline() {
+    shaderfile vert = readFile("shaders/vert.spv");
+    shaderfile frag = readFile("shaders/frag.spv");
+}
 
+shaderfile readFile(const char* filename) {
+    shaderfile result = {NULL, 0};
+    FILE* file;
+    file = fopen(filename, "rb");
+
+    if (file == NULL) {
+        c_throw("can't find file for readFile func");
+    }
+    
+    fseek(file, 0, SEEK_END);
+    result.size = ftell(file);
+    result.file = (char*)malloc(sizeof(char) * result.size);
+    fseek(file,0, SEEK_SET);
+    fgets(result.file, (int)result.size, file);
+
+    fclose(file);
+
+    return result;
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

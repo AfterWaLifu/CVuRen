@@ -74,7 +74,8 @@ VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t c
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
 void createImageViews();
 void createGraphicsPipeline();
-shaderfile readFile();
+shaderfile readFile(const char* filename);
+VkShaderModule createShaderModule(shaderfile file);
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -440,6 +441,13 @@ void createImageViews() {
 void createGraphicsPipeline() {
     shaderfile vert = readFile("shaders/vert.spv");
     shaderfile frag = readFile("shaders/frag.spv");
+
+    VkShaderModule vertShaderModule, fragShaderModule;
+    vertShaderModule = createShaderModule(vert);
+    fragShaderModule = createShaderModule(frag);
+
+    vkDestroyShaderModule(VULKAN.device, vertShaderModule, NULL);
+    vkDestroyShaderModule(VULKAN.device, fragShaderModule, NULL);
 }
 
 shaderfile readFile(const char* filename) {
@@ -453,13 +461,29 @@ shaderfile readFile(const char* filename) {
     
     fseek(file, 0, SEEK_END);
     result.size = ftell(file);
-    result.file = (char*)malloc(sizeof(char) * result.size);
+    result.file = (char*)malloc( (result.size%4) == 0 ? result.size : result.size + (4-(result.size%4)) );
     fseek(file,0, SEEK_SET);
     fgets(result.file, (int)result.size, file);
 
     fclose(file);
 
     return result;
+}
+
+VkShaderModule createShaderModule(shaderfile file) {
+    VkShaderModuleCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .pCode = (uint32_t*) file.file,
+        .codeSize = file.size
+    };
+    
+    VkShaderModule shaderModule = malloc(sizeof(VkShaderModule));
+    if (vkCreateShaderModule(VULKAN.device, &createInfo, NULL, &shaderModule) != VK_SUCCESS) {
+        c_throw("can't create shader module");
+    }
+    return shaderModule;
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

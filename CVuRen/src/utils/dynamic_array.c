@@ -100,7 +100,7 @@ void dau_erase(dynamic_array_uint* dau, size_t position) {
 
 uint32_t dau_get(dynamic_array_uint* dau, size_t position) {
 	if (position >= dau->length) return UINT32_MAX;
-	else *(dau->array[position]);
+	return *(dau->array[position]);
 }
 
 void dau_set(dynamic_array_uint* dau, size_t position, uint32_t item) {

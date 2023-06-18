@@ -56,49 +56,101 @@ void dai_set(dynamic_array_int* dai, size_t position, int item) {
 	*(dai->array[position]) = item;
 }
 
-void das_pushback(dynamic_array_string* dai, char* item) {
-	if (dai->length % 10 == 0) {
-		char** new_array = mallok(char*, dai->length + 10);
-		if (dai->array) {
-			for (size_t i = 0; i < dai->length; ++i) {
-				new_array[i] = dai->array[i];
+void dau_pushback(dynamic_array_uint* dau, uint32_t item) {
+	uint32_t* new_one = mallok(uint32_t, 1);
+	*new_one = item;
+
+	if (dau->length % 10 == 0) {
+		uint32_t** new_array = mallok(uint32_t*, dau->length + 10);
+		if (dau->array) {
+			for (size_t i = 0; i < dau->length; ++i) {
+				new_array[i] = dau->array[i];
 			}
-			free(dai->array);
+			free(dau->array);
 		}
-		dai->array = new_array;
+		dau->array = new_array;
 	}
-	dai->array[dai->length] = item;
-	++(dai->length);
+	dau->array[dau->length] = new_one;
+	++(dau->length);
 }
 
-void das_popback(dynamic_array_string* dai) {
-	if (dai->length) {
-		free(dai->array[dai->length - 1]);
-		dai->array[dai->length - 1] = NULL;
-		if (dai->length && (dai->length % 10 == 0)) {
-			char** new_array = mallok(char*, dai->length);
-			for (size_t i = 0; i < dai->length; ++i) {
-				new_array[i] = dai->array[i];
+void dau_popback(dynamic_array_uint* dau) {
+	if (dau->length) {
+		free(dau->array[dau->length - 1]);
+		dau->array[dau->length - 1] = NULL;
+		--(dau->length);
+		if (dau->length && (dau->length % 10 == 0)) {
+			uint32_t** new_array = mallok(uint32_t*, dau->length);
+			for (size_t i = 0; i < dau->length; ++i) {
+				new_array[i] = dau->array[i];
 			}
-			free(dai->array);
-			dai->array = new_array;
+			free(dau->array);
+			dau->array = new_array;
 		}
 	}
 }
 
-void das_insert(dynamic_array_string* dai, size_t position, char* item) {
+void dau_insert(dynamic_array_uint* dau, size_t position, uint32_t item) {
+
 }
 
-void das_erase(dynamic_array_string* dai, size_t position) {
+void dau_erase(dynamic_array_uint* dau, size_t position) {
+
 }
 
-char* das_get(dynamic_array_string* dai, size_t position) {
-	if (position >= dai->length) return NULL;
-	return dai->array[position];
+uint32_t dau_get(dynamic_array_uint* dau, size_t position) {
+	if (position >= dau->length) return UINT32_MAX;
+	else *(dau->array[position]);
 }
 
-void das_set(dynamic_array_string* dai, size_t position, char* item) {
-	if (position >= dai->length) return;
-	free(dai->array[position]);
-	dai->array[position] = item;
+void dau_set(dynamic_array_uint* dau, size_t position, uint32_t item) {
+	if (position >= dau->length) return;
+	*(dau->array[position]) = item;
+}
+
+void das_pushback(dynamic_array_string* das, char* item) {
+	if (das->length % 10 == 0) {
+		char** new_array = mallok(char*, das->length + 10);
+		if (das->array) {
+			for (size_t i = 0; i < das->length; ++i) {
+				new_array[i] = das->array[i];
+			}
+			free(das->array);
+		}
+		das->array = new_array;
+	}
+	das->array[das->length] = item;
+	++(das->length);
+}
+
+void das_popback(dynamic_array_string* das) {
+	if (das->length) {
+		free(das->array[das->length - 1]);
+		das->array[das->length - 1] = NULL;
+		if (das->length && (das->length % 10 == 0)) {
+			char** new_array = mallok(char*, das->length);
+			for (size_t i = 0; i < das->length; ++i) {
+				new_array[i] = das->array[i];
+			}
+			free(das->array);
+			das->array = new_array;
+		}
+	}
+}
+
+void das_insert(dynamic_array_string* das, size_t position, char* item) {
+}
+
+void das_erase(dynamic_array_string* das, size_t position) {
+}
+
+char* das_get(dynamic_array_string* das, size_t position) {
+	if (position >= das->length) return NULL;
+	return das->array[position];
+}
+
+void das_set(dynamic_array_string* das, size_t position, char* item) {
+	if (position >= das->length) return;
+	free(das->array[position]);
+	das->array[position] = item;
 }

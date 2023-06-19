@@ -446,6 +446,19 @@ void createGraphicsPipeline() {
     vertShaderModule = createShaderModule(vert);
     fragShaderModule = createShaderModule(frag);
 
+    VkPipelineShaderStageCreateInfo vertCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = vertShaderModule,
+        .pName = "main",
+        .pSpecializationInfo = NULL
+    };
+    VkPipelineShaderStageCreateInfo fragCreateInfo = vertCreateInfo;
+    fragCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragCreateInfo.module = fragShaderModule;
+
     vkDestroyShaderModule(VULKAN.device, vertShaderModule, NULL);
     vkDestroyShaderModule(VULKAN.device, fragShaderModule, NULL);
 }

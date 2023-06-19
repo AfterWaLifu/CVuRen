@@ -463,7 +463,9 @@ shaderfile readFile(const char* filename) {
     result.size = ftell(file);
     result.file = (char*)malloc( (result.size%4) == 0 ? result.size : result.size + (4-(result.size%4)) );
     fseek(file,0, SEEK_SET);
-    fgets(result.file, (int)result.size, file);
+    for (uint32_t i = 0; i < result.size; ++i) {
+        result.file[i] =  feof(file) ? '\0' : (char) fgetc(file) ;
+    }
 
     fclose(file);
 

@@ -33,6 +33,8 @@ static struct VULKAN {
     vkimages swapchainImages;
     vkimageviews swapchainImageViews;
 
+    VkPipelineLayout pipelineLayout;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -101,6 +103,7 @@ void initVk() {
     createGraphicsPipeline();
 }
 void cleanVk() {
+    vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
     for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
         vkDestroyImageView(VULKAN.device, VULKAN.swapchainImageViews.swapChainImageViews[i], NULL);
     }
@@ -458,6 +461,126 @@ void createGraphicsPipeline() {
     VkPipelineShaderStageCreateInfo fragCreateInfo = vertCreateInfo;
     fragCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragCreateInfo.module = fragShaderModule;
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .vertexBindingDescriptionCount = 0,
+        .pVertexBindingDescriptions = NULL,
+        .vertexAttributeDescriptionCount = 0,
+        .pVertexAttributeDescriptions = NULL
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    VkViewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)VULKAN.swapchainExtent.width,
+        .height = (float)VULKAN.swapchainExtent.height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+
+    VkRect2D scissor = {
+        .offset = {0,0},
+        .extent = VULKAN.swapchainExtent
+    };
+
+    VkDynamicState dynamicStates[2] = {
+        VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+    };
+    VkPipelineDynamicStateCreateInfo dynamicState = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dynamicStates
+    };
+
+    VkPipelineViewportStateCreateInfo viewportState = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor,
+    };
+
+    VkPipelineRasterizationStateCreateInfo rasterizer = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .depthBiasConstantFactor = 0.0f,
+        .depthBiasClamp = 0.0f,
+        .depthBiasSlopeFactor = 0.0f,
+        .lineWidth = 1.0f
+    };
+
+    VkPipelineMultisampleStateCreateInfo multisampling = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
+        .minSampleShading = 1.0f,
+        .pSampleMask = NULL,
+        .alphaToCoverageEnable = VK_FALSE,
+        .alphaToOneEnable = VK_FALSE
+    };
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT
+    };
+
+    VkPipelineColorBlendStateCreateInfo colorBlending = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .logicOpEnable = VK_TRUE,
+        .logicOp = VK_LOGIC_OP_COPY,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment,
+        .blendConstants = {0.0f,0.0f,0.0f,0.0f}
+    };
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .setLayoutCount = 0,
+        .pSetLayouts = NULL,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = NULL 
+    };
+
+    VULKAN.pipelineLayout = malloc(sizeof(VkPipelineLayout));
+    if (vkCreatePipelineLayout(VULKAN.device, &pipelineLayoutInfo, NULL, &VULKAN.pipelineLayout) != VK_SUCCESS) {
+        c_throw("failed to create pipeline layout");
+    }
 
     vkDestroyShaderModule(VULKAN.device, vertShaderModule, NULL);
     vkDestroyShaderModule(VULKAN.device, fragShaderModule, NULL);

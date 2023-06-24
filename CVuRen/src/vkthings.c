@@ -33,6 +33,7 @@ static struct VULKAN {
     vkimages swapchainImages;
     vkimageviews swapchainImageViews;
 
+    VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
 
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -75,6 +76,7 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const VkSurfaceFormatKHR* formats, ui
 VkPresentModeKHR chooseSwapPresentMode(const VkPresentModeKHR* modes, uint32_t count);
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR* capabilities);
 void createImageViews();
+void createRenderPass();
 void createGraphicsPipeline();
 shaderfile readFile(const char* filename);
 VkShaderModule createShaderModule(shaderfile file);
@@ -100,10 +102,12 @@ void initVk() {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createRenderPass();
     createGraphicsPipeline();
 }
 void cleanVk() {
     vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
+    vkDestroyRenderPass(VULKAN.device, VULKAN.renderPass, NULL);
     for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
         vkDestroyImageView(VULKAN.device, VULKAN.swapchainImageViews.swapChainImageViews[i], NULL);
     }
@@ -438,6 +442,55 @@ void createImageViews() {
             VULKAN.swapchainImageViews.swapChainImageViews+i) != VK_SUCCESS) {
             c_throw("failed to create image views");
         }
+    }
+}
+
+void createRenderPass() {
+    VkAttachmentDescription colorAttachment = {
+        .flags = 0,
+        .format = VULKAN.swapchainImageFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    };
+
+    VkAttachmentReference colorAttachmentRef = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+
+    VkSubpassDescription subpass = {
+        .flags = 0,
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .inputAttachmentCount = 0,
+        .pInputAttachments = NULL,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachmentRef,
+        .pResolveAttachments = NULL,
+        .pDepthStencilAttachment = NULL,
+        .preserveAttachmentCount = 0,
+        .pPreserveAttachments = NULL
+    };
+
+    VkRenderPassCreateInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .attachmentCount = 1,
+        .pAttachments = &colorAttachment,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 0,
+        .pDependencies = NULL
+    };
+
+    VULKAN.renderPass = malloc(sizeof(VkRenderPass));
+    if (vkCreateRenderPass(VULKAN.device, &renderPassInfo, NULL, &VULKAN.renderPass) != VK_SUCCESS) {
+        c_throw("failed to create render pass");
     }
 }
 

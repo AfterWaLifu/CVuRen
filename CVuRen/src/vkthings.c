@@ -35,6 +35,7 @@ static struct VULKAN {
 
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -106,6 +107,7 @@ void initVk() {
     createGraphicsPipeline();
 }
 void cleanVk() {
+    vkDestroyPipeline(VULKAN.device, VULKAN.pipeline, NULL);
     vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
     vkDestroyRenderPass(VULKAN.device, VULKAN.renderPass, NULL);
     for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
@@ -307,6 +309,12 @@ void createLogicalDevice() {
         queueCreateInfos[i].pQueuePriorities = &qPriority;
     }
 
+    VkPhysicalDeviceFeatures deviceFeatures = {
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    };
+    deviceFeatures.logicOp = VK_TRUE;
+
     VkDeviceCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = NULL,
@@ -317,7 +325,7 @@ void createLogicalDevice() {
         .ppEnabledLayerNames = NULL,
         .enabledExtensionCount = deviceExtensionsCount,
         .ppEnabledExtensionNames = deviceExtensions,
-        .pEnabledFeatures = NULL
+        .pEnabledFeatures = &deviceFeatures
     };
 
     if (VALIDATION_LAYERS) {
@@ -514,6 +522,7 @@ void createGraphicsPipeline() {
     VkPipelineShaderStageCreateInfo fragCreateInfo = vertCreateInfo;
     fragCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragCreateInfo.module = fragShaderModule;
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertCreateInfo, fragCreateInfo};
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -633,6 +642,33 @@ void createGraphicsPipeline() {
     VULKAN.pipelineLayout = malloc(sizeof(VkPipelineLayout));
     if (vkCreatePipelineLayout(VULKAN.device, &pipelineLayoutInfo, NULL, &VULKAN.pipelineLayout) != VK_SUCCESS) {
         c_throw("failed to create pipeline layout");
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputInfo,
+        .pInputAssemblyState = &inputAssembly,
+        .pTessellationState = NULL,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pDepthStencilState = NULL,
+        .pColorBlendState = &colorBlending,
+        .pDynamicState = &dynamicState,
+        .layout = VULKAN.pipelineLayout,
+        .renderPass = VULKAN.renderPass,
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1
+    };
+
+    VULKAN.pipeline = malloc(sizeof(VkPipeline));
+    if (vkCreateGraphicsPipelines(VULKAN.device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &VULKAN.pipeline) != VK_SUCCESS) {
+        c_throw("failed to create graphics pipeline");
     }
 
     vkDestroyShaderModule(VULKAN.device, vertShaderModule, NULL);

@@ -36,6 +36,7 @@ static struct VULKAN {
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
+    framebuffer swapchainFramebuffers;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -81,6 +82,7 @@ void createRenderPass();
 void createGraphicsPipeline();
 shaderfile readFile(const char* filename);
 VkShaderModule createShaderModule(shaderfile file);
+void createFramebuffers();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -105,8 +107,12 @@ void initVk() {
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createFramebuffers();
 }
 void cleanVk() {
+    for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
+        vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
+    }
     vkDestroyPipeline(VULKAN.device, VULKAN.pipeline, NULL);
     vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
     vkDestroyRenderPass(VULKAN.device, VULKAN.renderPass, NULL);
@@ -711,6 +717,33 @@ VkShaderModule createShaderModule(shaderfile file) {
         c_throw("can't create shader module");
     }
     return shaderModule;
+}
+
+void createFramebuffers() {
+    VULKAN.swapchainFramebuffers.f = malloc(sizeof(VkFramebuffer) * VULKAN.swapchainImageViews.count);
+    VULKAN.swapchainFramebuffers.count = VULKAN.swapchainImageViews.count;
+
+    for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
+        VkImageView attachments[] = {
+            VULKAN.swapchainImageViews.swapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .renderPass = VULKAN.renderPass,
+            .attachmentCount = 1,
+            .pAttachments = attachments,
+            .width = VULKAN.swapchainExtent.width,
+            .height = VULKAN.swapchainExtent.height,
+            .layers = 1
+        };
+
+        if (vkCreateFramebuffer(VULKAN.device, &framebufferInfo, NULL, VULKAN.swapchainFramebuffers.f+i) != VK_SUCCESS) {
+            c_throw("failed to create framebuffer");
+        }
+    }
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

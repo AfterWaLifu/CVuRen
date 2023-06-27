@@ -16,3 +16,8 @@ typedef struct shaderfile {
 	char* file;
 	size_t size;
 } shaderfile;
+
+typedef struct framebuffer {
+	VkFramebuffer* f;
+	size_t count;
+} framebuffer;

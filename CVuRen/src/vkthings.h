@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-
 void initVk();
 void cleanVk();
+void drawFrame();
+void deviceIdle();

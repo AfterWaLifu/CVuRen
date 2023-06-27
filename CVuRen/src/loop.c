@@ -6,7 +6,9 @@
 void mainloop() {
 	while (!glfwWindowShouldClose(WINDOW.window)) {
 		glfwPollEvents();
+		drawFrame();
 	}
+	deviceIdle();
 }
 
 void run() {

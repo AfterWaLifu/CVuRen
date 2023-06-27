@@ -36,7 +36,9 @@ static struct VULKAN {
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
+    
     framebuffer swapchainFramebuffers;
+    VkCommandPool commandPool;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -83,6 +85,7 @@ void createGraphicsPipeline();
 shaderfile readFile(const char* filename);
 VkShaderModule createShaderModule(shaderfile file);
 void createFramebuffers();
+void createCommandPool();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -108,8 +111,10 @@ void initVk() {
     createRenderPass();
     createGraphicsPipeline();
     createFramebuffers();
+    createCommandPool();
 }
 void cleanVk() {
+    vkDestroyCommandPool(VULKAN.device, VULKAN.commandPool, NULL);
     for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
         vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
     }
@@ -743,6 +748,21 @@ void createFramebuffers() {
         if (vkCreateFramebuffer(VULKAN.device, &framebufferInfo, NULL, VULKAN.swapchainFramebuffers.f+i) != VK_SUCCESS) {
             c_throw("failed to create framebuffer");
         }
+    }
+}
+
+void createCommandPool() {
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(VULKAN.physicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = NULL,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queueFamilyIndices.graphicsFamily
+    };
+
+    if (vkCreateCommandPool(VULKAN.device, &poolInfo, NULL, &VULKAN.commandPool) != VK_SUCCESS) {
+        c_throw("failed to create command pool");
     }
 }
 

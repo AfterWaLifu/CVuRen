@@ -39,6 +39,7 @@ static struct VULKAN {
     
     framebuffer swapchainFramebuffers;
     VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -86,6 +87,7 @@ shaderfile readFile(const char* filename);
 VkShaderModule createShaderModule(shaderfile file);
 void createFramebuffers();
 void createCommandPool();
+void createCommandBuffer();
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -112,6 +114,7 @@ void initVk() {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createCommandBuffer();
 }
 void cleanVk() {
     vkDestroyCommandPool(VULKAN.device, VULKAN.commandPool, NULL);
@@ -764,6 +767,19 @@ void createCommandPool() {
     if (vkCreateCommandPool(VULKAN.device, &poolInfo, NULL, &VULKAN.commandPool) != VK_SUCCESS) {
         c_throw("failed to create command pool");
     }
+}
+
+void createCommandBuffer() {
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = NULL,
+        .commandPool = VULKAN.commandPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+    if (vkAllocateCommandBuffers(VULKAN.device, &allocInfo, &VULKAN.commandBuffer)) {
+        c_throw("failed to allocate command buffers");
+    };
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

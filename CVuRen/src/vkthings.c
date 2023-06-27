@@ -88,6 +88,7 @@ VkShaderModule createShaderModule(shaderfile file);
 void createFramebuffers();
 void createCommandPool();
 void createCommandBuffer();
+void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -780,6 +781,57 @@ void createCommandBuffer() {
     if (vkAllocateCommandBuffers(VULKAN.device, &allocInfo, &VULKAN.commandBuffer)) {
         c_throw("failed to allocate command buffers");
     };
+}
+
+void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .pInheritanceInfo = NULL
+    };
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        c_throw("failed to begin a command buffer");
+    }
+
+    VkClearValue clearColor = {{{0.0f,0.0f,0.0f,1.0f}}};
+    VkRenderPassBeginInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext = NULL,
+        .renderPass = VULKAN.renderPass,
+        .framebuffer = VULKAN.swapchainFramebuffers.f[imageIndex],
+        .renderArea = {
+            .offset = {0,0},
+            .extent = VULKAN.swapchainExtent
+        },
+        .clearValueCount = 1,
+        .pClearValues = &clearColor,
+    };
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VULKAN.pipeline);
+    VkViewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float) VULKAN.swapchainExtent.width,
+        .height = (float) VULKAN.swapchainExtent.height ,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    VkRect2D scissor = {
+        .offset = {0,0},
+        .extent = VULKAN.swapchainExtent
+    };
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        c_throw("fauled to record command buffer");
+    }
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

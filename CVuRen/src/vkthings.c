@@ -41,11 +41,13 @@ static struct VULKAN {
     
     framebuffer swapchainFramebuffers;
     VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
+    VkCommandBuffer* commandBuffer;
 
-    VkSemaphore imageAvailableSemaphore;
-    VkSemaphore renderFinishedSemaphore;
-    VkFence inFlightFence;
+    VkSemaphore* imageAvailableSemaphore;
+    VkSemaphore* renderFinishedSemaphore;
+    VkFence* inFlightFence;
+
+    uint32_t currentFrame;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -58,6 +60,8 @@ const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation\0"};
 
 const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 const uint32_t deviceExtensionsCount = 1;
+
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
@@ -93,7 +97,7 @@ shaderfile readFile(const char* filename);
 VkShaderModule createShaderModule(shaderfile file);
 void createFramebuffers();
 void createCommandPool();
-void createCommandBuffer();
+void createCommandBuffers();
 void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 void createSyncObjects();
 
@@ -122,13 +126,15 @@ void initVk() {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
-    createCommandBuffer();
+    createCommandBuffers();
     createSyncObjects();
 }
 void cleanVk() {
-    vkDestroySemaphore(VULKAN.device, VULKAN.imageAvailableSemaphore, NULL);
-    vkDestroySemaphore(VULKAN.device, VULKAN.renderFinishedSemaphore, NULL);
-    vkDestroyFence(VULKAN.device, VULKAN.inFlightFence, NULL);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        vkDestroySemaphore(VULKAN.device, VULKAN.imageAvailableSemaphore[i], NULL);
+        vkDestroySemaphore(VULKAN.device, VULKAN.renderFinishedSemaphore[i], NULL);
+        vkDestroyFence(VULKAN.device, VULKAN.inFlightFence[i], NULL);
+    }
     vkDestroyCommandPool(VULKAN.device, VULKAN.commandPool, NULL);
     for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
         vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
@@ -149,18 +155,18 @@ void cleanVk() {
 }
 
 void drawFrame() {
-    vkWaitForFences(VULKAN.device, 1, &(VULKAN.inFlightFence), VK_TRUE, UINT64_MAX);
-    vkResetFences(VULKAN.device, 1, &VULKAN.inFlightFence);
+    vkWaitForFences(VULKAN.device, 1, VULKAN.inFlightFence+VULKAN.currentFrame, VK_TRUE, UINT64_MAX);
+    vkResetFences(VULKAN.device, 1, VULKAN.inFlightFence+VULKAN.currentFrame);
 
     uint32_t imageIndex = 0;
     vkAcquireNextImageKHR(VULKAN.device, VULKAN.swapchain, UINT64_MAX,
-        VULKAN.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+        VULKAN.imageAvailableSemaphore[VULKAN.currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-    vkResetCommandBuffer(VULKAN.commandBuffer, 0);
-    recordCommandBuffer(VULKAN.commandBuffer, imageIndex);
+    vkResetCommandBuffer(VULKAN.commandBuffer[VULKAN.currentFrame], 0);
+    recordCommandBuffer(VULKAN.commandBuffer[VULKAN.currentFrame], imageIndex);
 
-    VkSemaphore waitSemaphores[] = { VULKAN.imageAvailableSemaphore };
-    VkSemaphore signalSemaphores[] = { VULKAN.renderFinishedSemaphore };
+    VkSemaphore waitSemaphores[] = { VULKAN.imageAvailableSemaphore[VULKAN.currentFrame] };
+    VkSemaphore signalSemaphores[] = { VULKAN.renderFinishedSemaphore[VULKAN.currentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     VkSubmitInfo submitInfo = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -169,12 +175,12 @@ void drawFrame() {
         .pWaitSemaphores = waitSemaphores,
         .pWaitDstStageMask = waitStages,
         .commandBufferCount = 1,
-        .pCommandBuffers = &VULKAN.commandBuffer,
+        .pCommandBuffers = VULKAN.commandBuffer+VULKAN.currentFrame,
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = signalSemaphores
     };
 
-    if (vkQueueSubmit(VULKAN.graphicsQueue, 1, &submitInfo, VULKAN.inFlightFence) != VK_SUCCESS) {
+    if (vkQueueSubmit(VULKAN.graphicsQueue, 1, &submitInfo, VULKAN.inFlightFence[VULKAN.currentFrame]) != VK_SUCCESS) {
         c_throw("failed to submit draw command buffer");
     }
 
@@ -190,6 +196,8 @@ void drawFrame() {
     };
 
     vkQueuePresentKHR(VULKAN.presentQueue, &presentInfo);
+
+    VULKAN.currentFrame = (VULKAN.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 void deviceIdle() {
     vkDeviceWaitIdle(VULKAN.device);
@@ -838,15 +846,16 @@ void createCommandPool() {
     }
 }
 
-void createCommandBuffer() {
+void createCommandBuffers() {
+    VULKAN.commandBuffer = malloc(sizeof(VkCommandBuffer) * MAX_FRAMES_IN_FLIGHT);
     VkCommandBufferAllocateInfo allocInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = NULL,
         .commandPool = VULKAN.commandPool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1
+        .commandBufferCount = (uint32_t) MAX_FRAMES_IN_FLIGHT
     };
-    if (vkAllocateCommandBuffers(VULKAN.device, &allocInfo, &VULKAN.commandBuffer)) {
+    if (vkAllocateCommandBuffers(VULKAN.device, &allocInfo, VULKAN.commandBuffer)) {
         c_throw("failed to allocate command buffers");
     };
 }
@@ -903,6 +912,11 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
 }
 
 void createSyncObjects() {
+    VULKAN.currentFrame = 0;
+    VULKAN.imageAvailableSemaphore = malloc(sizeof(VkSemaphore) * MAX_FRAMES_IN_FLIGHT);
+    VULKAN.renderFinishedSemaphore = malloc(sizeof(VkSemaphore) * MAX_FRAMES_IN_FLIGHT);
+    VULKAN.inFlightFence = malloc(sizeof(VkFence) * MAX_FRAMES_IN_FLIGHT);
+
     VkSemaphoreCreateInfo semaphoreInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = NULL,
@@ -914,10 +928,12 @@ void createSyncObjects() {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
 
-    if (vkCreateSemaphore(VULKAN.device, &semaphoreInfo, NULL, &VULKAN.imageAvailableSemaphore) != VK_SUCCESS ||
-        vkCreateSemaphore(VULKAN.device, &semaphoreInfo, NULL, &VULKAN.renderFinishedSemaphore) != VK_SUCCESS ||
-        vkCreateFence(VULKAN.device, &fenceInfo, NULL, &VULKAN.inFlightFence) != VK_SUCCESS) {
-        c_throw("failed to create semaphores");
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        if (vkCreateSemaphore(VULKAN.device, &semaphoreInfo, NULL, VULKAN.imageAvailableSemaphore+i) != VK_SUCCESS ||
+            vkCreateSemaphore(VULKAN.device, &semaphoreInfo, NULL, VULKAN.renderFinishedSemaphore+i) != VK_SUCCESS ||
+            vkCreateFence(VULKAN.device, &fenceInfo, NULL, VULKAN.inFlightFence+i) != VK_SUCCESS) {
+            c_throw("failed to create semaphores");
+        }
     }
 }
 

@@ -963,6 +963,13 @@ void createSyncObjects() {
 }
 
 void recreateSwapchain() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(WINDOW.window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(WINDOW.window, &width, &height);
+        glfwWaitEvents();
+    }
+
     vkDeviceWaitIdle(VULKAN.device);
 
     clearupSwapchain();

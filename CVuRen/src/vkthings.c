@@ -47,6 +47,8 @@ static struct VULKAN {
     VkSemaphore* renderFinishedSemaphore;
     VkFence* inFlightFence;
 
+    bool framebufferResized;
+
     uint32_t currentFrame;
 
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -100,6 +102,10 @@ void createCommandPool();
 void createCommandBuffers();
 void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 void createSyncObjects();
+void recreateSwapchain();
+void clearupSwapchain();
+
+static void framebufferResizeCallback(GLFWwindow* window, int width, int hegiht);
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -115,6 +121,7 @@ void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* create
 
 //  FROM .H
 void initVk() {
+    glfwSetFramebufferSizeCallback(WINDOW.window, framebufferResizeCallback);
     createInstance();
     setupDebugMessenger();
     createSurface();
@@ -130,37 +137,47 @@ void initVk() {
     createSyncObjects();
 }
 void cleanVk() {
+    clearupSwapchain();
+
+    vkDestroyPipeline(VULKAN.device, VULKAN.pipeline, NULL);
+    vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
+
+    vkDestroyRenderPass(VULKAN.device, VULKAN.renderPass, NULL);
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         vkDestroySemaphore(VULKAN.device, VULKAN.imageAvailableSemaphore[i], NULL);
         vkDestroySemaphore(VULKAN.device, VULKAN.renderFinishedSemaphore[i], NULL);
         vkDestroyFence(VULKAN.device, VULKAN.inFlightFence[i], NULL);
     }
+
     vkDestroyCommandPool(VULKAN.device, VULKAN.commandPool, NULL);
-    for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
-        vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
-    }
-    vkDestroyPipeline(VULKAN.device, VULKAN.pipeline, NULL);
-    vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
-    vkDestroyRenderPass(VULKAN.device, VULKAN.renderPass, NULL);
-    for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
-        vkDestroyImageView(VULKAN.device, VULKAN.swapchainImageViews.swapChainImageViews[i], NULL);
-    }
-    vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
+    
     vkDestroyDevice(VULKAN.device, NULL);
+
     if (VALIDATION_LAYERS) {
         DestroyDebugUtilsMessengerEXT(NULL);
     }
+
     vkDestroySurfaceKHR(VULKAN.instance, VULKAN.surface, NULL);
     vkDestroyInstance(VULKAN.instance, NULL);
 }
 
 void drawFrame() {
     vkWaitForFences(VULKAN.device, 1, VULKAN.inFlightFence+VULKAN.currentFrame, VK_TRUE, UINT64_MAX);
-    vkResetFences(VULKAN.device, 1, VULKAN.inFlightFence+VULKAN.currentFrame);
 
     uint32_t imageIndex = 0;
-    vkAcquireNextImageKHR(VULKAN.device, VULKAN.swapchain, UINT64_MAX,
+    
+    VkResult result = vkAcquireNextImageKHR(VULKAN.device, VULKAN.swapchain, UINT64_MAX,
         VULKAN.imageAvailableSemaphore[VULKAN.currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreateSwapchain();
+        return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        c_throw("failed to acquire swapchain image");
+    }
+
+    vkResetFences(VULKAN.device, 1, VULKAN.inFlightFence + VULKAN.currentFrame);
 
     vkResetCommandBuffer(VULKAN.commandBuffer[VULKAN.currentFrame], 0);
     recordCommandBuffer(VULKAN.commandBuffer[VULKAN.currentFrame], imageIndex);
@@ -195,7 +212,14 @@ void drawFrame() {
         .pResults = NULL
     };
 
-    vkQueuePresentKHR(VULKAN.presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(VULKAN.presentQueue, &presentInfo);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        VULKAN.framebufferResized = false;
+        recreateSwapchain();
+    } else if (result != VK_SUCCESS) {
+        c_throw("failed to present swapchain image");
+    }
 
     VULKAN.currentFrame = (VULKAN.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -805,6 +829,7 @@ VkShaderModule createShaderModule(shaderfile file) {
 }
 
 void createFramebuffers() {
+    VULKAN.framebufferResized = false;
     VULKAN.swapchainFramebuffers.f = malloc(sizeof(VkFramebuffer) * VULKAN.swapchainImageViews.count);
     VULKAN.swapchainFramebuffers.count = VULKAN.swapchainImageViews.count;
 
@@ -935,6 +960,32 @@ void createSyncObjects() {
             c_throw("failed to create semaphores");
         }
     }
+}
+
+void recreateSwapchain() {
+    vkDeviceWaitIdle(VULKAN.device);
+
+    clearupSwapchain();
+
+    createSwapChain();
+    createImageViews();
+    createFramebuffers();
+}
+
+void clearupSwapchain() {
+    for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
+        vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
+    }
+
+    for (uint32_t i = 0; i < VULKAN.swapchainImageViews.count; ++i) {
+        vkDestroyImageView(VULKAN.device, VULKAN.swapchainImageViews.swapChainImageViews[i], NULL);
+    }
+
+    vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
+}
+
+void framebufferResizeCallback(GLFWwindow* window, int width, int hegiht) {
+    VULKAN.framebufferResized = true;
 }
 
 //  VALIDATION THINGS IMPLEMENTATION

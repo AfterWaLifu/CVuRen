@@ -105,7 +105,7 @@ void createSyncObjects();
 void recreateSwapchain();
 void clearupSwapchain();
 
-static void framebufferResizeCallback(GLFWwindow* window, int width, int hegiht);
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
 //	VALIDATION THINGS
 uint32_t checkValidationLayersSupport();
@@ -991,7 +991,7 @@ void clearupSwapchain() {
     vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
 }
 
-void framebufferResizeCallback(GLFWwindow* window, int width, int hegiht) {
+void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
     VULKAN.framebufferResized = true;
 }
 

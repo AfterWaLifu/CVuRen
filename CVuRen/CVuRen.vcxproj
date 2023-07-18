@@ -160,6 +160,7 @@
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\utils\dynamic_array.c" />
     <ClCompile Include="src\utils\utils.c" />
+    <ClCompile Include="src\vertexes.c" />
     <ClCompile Include="src\vkthings.c" />
     <ClCompile Include="src\window.c" />
   </ItemGroup>
@@ -167,6 +168,7 @@
     <ClInclude Include="src\loop.h" />
     <ClInclude Include="src\utils\dynamic_array.h" />
     <ClInclude Include="src\utils\utils.h" />
+    <ClInclude Include="src\vertexes.h" />
     <ClInclude Include="src\vkstructs.h" />
     <ClInclude Include="src\vkthings.h" />
     <ClInclude Include="src\window.h" />

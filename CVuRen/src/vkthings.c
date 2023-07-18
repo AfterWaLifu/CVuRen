@@ -9,6 +9,7 @@
 
 #include "window.h"
 #include "vkstructs.h"
+#include "vertexes.h"
 
 #include "utils/dynamic_array.h"
 #include "utils/utils.h"
@@ -64,6 +65,12 @@ const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 const uint32_t deviceExtensionsCount = 1;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+Vertex vertices[3] = {
+    {{0.0f, -0.5f,0.0f},{1.0f, 0.0f, 0.0f,1.0f}},
+    {{0.5f,  0.5f,0.0f},{0.0f, 1.0f, 0.0f,1.0f}},
+    {{-0.5f, 0.5f,0.0f},{0.0f, 0.0f, 1.0f,1.0f}}
+};
 
 typedef struct QueueFamilyIndices {
     uint32_t graphicsFamily;
@@ -639,14 +646,17 @@ void createGraphicsPipeline() {
     fragCreateInfo.module = fragShaderModule;
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertCreateInfo, fragCreateInfo};
 
+    VkVertexInputBindingDescription bindingDescription = getBindDescription();
+    VertexAttribDescrStruct attributeDescriptions = getAttributeDescriptions();
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .vertexBindingDescriptionCount = 0,
-        .pVertexBindingDescriptions = NULL,
-        .vertexAttributeDescriptionCount = 0,
-        .pVertexAttributeDescriptions = NULL
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDescription,
+        .vertexAttributeDescriptionCount = attributeDescriptions.count,
+        .pVertexAttributeDescriptions = attributeDescriptions.descrs
     };
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {

@@ -52,6 +52,9 @@ static struct VULKAN {
 
     uint32_t currentFrame;
 
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -67,9 +70,9 @@ const uint32_t deviceExtensionsCount = 1;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 Vertex vertices[3] = {
-    {{0.0f, -0.5f,0.0f},{1.0f, 0.0f, 0.0f,1.0f}},
-    {{0.5f,  0.5f,0.0f},{0.0f, 1.0f, 0.0f,1.0f}},
-    {{-0.5f, 0.5f,0.0f},{0.0f, 0.0f, 1.0f,1.0f}}
+    {{0.0f, -0.5f,0.5f},{1.0f, 0.0f, 0.0f,1.0f}},
+    {{0.5f,  0.5f,0.5f},{0.0f, 1.0f, 0.0f,1.0f}},
+    {{-0.5f, 0.5f,0.5f},{0.0f, 0.0f, 1.0f,1.0f}}
 };
 
 typedef struct QueueFamilyIndices {
@@ -111,6 +114,8 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 void createSyncObjects();
 void recreateSwapchain();
 void clearupSwapchain();
+void createVertexBuffer();
+uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -140,11 +145,15 @@ void initVk() {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createVertexBuffer();
     createCommandBuffers();
     createSyncObjects();
 }
 void cleanVk() {
     clearupSwapchain();
+
+    vkDestroyBuffer(VULKAN.device, VULKAN.vertexBuffer, NULL);
+    vkFreeMemory(VULKAN.device, VULKAN.vertexBufferMemory, NULL);
 
     vkDestroyPipeline(VULKAN.device, VULKAN.pipeline, NULL);
     vkDestroyPipelineLayout(VULKAN.device, VULKAN.pipelineLayout, NULL);
@@ -922,6 +931,7 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VULKAN.pipeline);
+
     VkViewport viewport = {
         .x = 0.0f,
         .y = 0.0f,
@@ -931,11 +941,16 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         .maxDepth = 1.0f
     };
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
     VkRect2D scissor = {
         .offset = {0,0},
         .extent = VULKAN.swapchainExtent
     };
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    VkBuffer vertexBuffers[] = { VULKAN.vertexBuffer };
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
     vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
@@ -999,6 +1014,59 @@ void clearupSwapchain() {
     }
 
     vkDestroySwapchainKHR(VULKAN.device, VULKAN.swapchain, NULL);
+}
+
+void createVertexBuffer() {
+    VkBufferCreateInfo bufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .size = sizeof(vertices[0]) * 6,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = NULL
+    };
+
+    if (vkCreateBuffer(VULKAN.device, &bufferInfo, NULL, &VULKAN.vertexBuffer) != VK_SUCCESS) {
+        c_throw("failed to create vertex buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(VULKAN.device, VULKAN.vertexBuffer, &memRequirements);
+    VkMemoryAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = NULL,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+    };
+
+    if (vkAllocateMemory(VULKAN.device, &allocInfo, NULL, &VULKAN.vertexBufferMemory) != VK_SUCCESS) {
+        c_throw("failed to allocate vertex buffer memory");
+    }
+
+    vkBindBufferMemory(VULKAN.device, VULKAN.vertexBuffer, VULKAN.vertexBufferMemory, 0);
+
+    void* data = malloc(bufferInfo.size);
+    vkMapMemory(VULKAN.device, VULKAN.vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+    memcpy(data, vertices, bufferInfo.size);
+    vkUnmapMemory(VULKAN.device, VULKAN.vertexBufferMemory);
+}
+
+uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(VULKAN.physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+        if ( (typeFilter & (1 << i)) &&
+            ((memProperties.memoryTypes[i].propertyFlags & properties) == properties)) {
+            return i;
+        }
+    }
+
+    c_throw("failed to find suitable memory type");
+    return UINT32_MAX;
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

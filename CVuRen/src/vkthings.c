@@ -116,6 +116,8 @@ void recreateSwapchain();
 void clearupSwapchain();
 void createVertexBuffer();
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -1017,40 +1019,15 @@ void clearupSwapchain() {
 }
 
 void createVertexBuffer() {
-    VkBufferCreateInfo bufferInfo = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .size = sizeof(vertices[0]) * 6,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = 0,
-        .pQueueFamilyIndices = NULL
-    };
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * 3;
 
-    if (vkCreateBuffer(VULKAN.device, &bufferInfo, NULL, &VULKAN.vertexBuffer) != VK_SUCCESS) {
-        c_throw("failed to create vertex buffer");
-    }
+    createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &VULKAN.vertexBuffer, &VULKAN.vertexBufferMemory);
 
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(VULKAN.device, VULKAN.vertexBuffer, &memRequirements);
-    VkMemoryAllocateInfo allocInfo = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext = NULL,
-        .allocationSize = memRequirements.size,
-        .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, 
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-    };
-
-    if (vkAllocateMemory(VULKAN.device, &allocInfo, NULL, &VULKAN.vertexBufferMemory) != VK_SUCCESS) {
-        c_throw("failed to allocate vertex buffer memory");
-    }
-
-    vkBindBufferMemory(VULKAN.device, VULKAN.vertexBuffer, VULKAN.vertexBufferMemory, 0);
-
-    void* data = malloc(bufferInfo.size);
-    vkMapMemory(VULKAN.device, VULKAN.vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-    memcpy(data, vertices, bufferInfo.size);
+    void* data = malloc(bufferSize);
+    vkMapMemory(VULKAN.device, VULKAN.vertexBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, vertices, bufferSize);
     vkUnmapMemory(VULKAN.device, VULKAN.vertexBufferMemory);
 }
 
@@ -1067,6 +1044,43 @@ uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
 
     c_throw("failed to find suitable memory type");
     return UINT32_MAX;
+}
+
+void createBuffer(
+    VkDeviceSize size, VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties, VkBuffer* buffer,
+    VkDeviceMemory* bufferMemory) {
+    
+    VkBufferCreateInfo bufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .size = size,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = NULL
+    };
+
+    if (vkCreateBuffer(VULKAN.device, &bufferInfo, NULL, buffer) != VK_SUCCESS) {
+        c_throw("failed to create vertex buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(VULKAN.device, *buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = NULL,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties)
+    };
+
+    if (vkAllocateMemory(VULKAN.device, &allocInfo, NULL, bufferMemory) != VK_SUCCESS) {
+        c_throw("failed to allocate vertex buffer memory");
+    }
+
+    vkBindBufferMemory(VULKAN.device, *buffer, *bufferMemory, 0);
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

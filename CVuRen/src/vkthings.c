@@ -118,6 +118,7 @@ void createVertexBuffer();
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
+void copyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer, VkDeviceSize size);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -1021,14 +1022,25 @@ void clearupSwapchain() {
 void createVertexBuffer() {
     VkDeviceSize bufferSize = sizeof(vertices[0]) * 3;
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &VULKAN.vertexBuffer, &VULKAN.vertexBufferMemory);
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
 
-    void* data = malloc(bufferSize);
-    vkMapMemory(VULKAN.device, VULKAN.vertexBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, vertices, bufferSize);
-    vkUnmapMemory(VULKAN.device, VULKAN.vertexBufferMemory);
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &stagingBuffer, &stagingBufferMemory);
+
+    void* data;// = malloc(bufferSize);
+    vkMapMemory(VULKAN.device, stagingBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, vertices, (size_t)bufferSize);
+    vkUnmapMemory(VULKAN.device, stagingBufferMemory);
+
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &VULKAN.vertexBuffer, &VULKAN.vertexBufferMemory);
+
+    copyBuffer(stagingBuffer, VULKAN.vertexBuffer, bufferSize);
+
+    vkDestroyBuffer(VULKAN.device, stagingBuffer, NULL);
+    vkFreeMemory(VULKAN.device, stagingBufferMemory, NULL);
 }
 
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -1081,6 +1093,53 @@ void createBuffer(
     }
 
     vkBindBufferMemory(VULKAN.device, *buffer, *bufferMemory, 0);
+}
+
+void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = NULL,
+        .commandPool = VULKAN.commandPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(VULKAN.device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext = NULL,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = NULL
+    };
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    VkBufferCopy copyRegion = {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = size
+    };
+    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = NULL,
+        .waitSemaphoreCount = 0,
+        .pWaitSemaphores = NULL,
+        .pWaitDstStageMask = NULL,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer,
+        .signalSemaphoreCount = 0,
+        .pSignalSemaphores = NULL
+    };
+
+    vkQueueSubmit(VULKAN.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(VULKAN.graphicsQueue);
+
+    vkFreeCommandBuffers(VULKAN.device, VULKAN.commandPool, 1, &commandBuffer);
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

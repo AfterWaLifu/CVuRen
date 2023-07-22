@@ -20,6 +20,7 @@
 #define VALIDATION_LAYERS 1
 #endif
 
+// ======= VULKAN DATA STRUCT ======= //
 static struct VULKAN {
     VkInstance instance;
     VkSurfaceKHR surface;
@@ -54,6 +55,8 @@ static struct VULKAN {
 
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -69,10 +72,16 @@ const uint32_t deviceExtensionsCount = 1;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-Vertex vertices[3] = {
-    {{0.0f, -0.5f,0.5f},{1.0f, 0.0f, 0.0f,1.0f}},
-    {{0.5f,  0.5f,0.5f},{0.0f, 1.0f, 0.0f,1.0f}},
-    {{-0.5f, 0.5f,0.5f},{0.0f, 0.0f, 1.0f,1.0f}}
+#define VERICES_COUNT 4
+Vertex vertices[VERICES_COUNT] = {
+    {{-0.5f, -0.5f, 0.0f},{1.0f, 0.0f, 0.0f,1.0f}},
+    {{ 0.5f, -0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}},
+    {{ 0.5f,  0.5f, 0.0f},{0.0f, 0.0f, 1.0f,1.0f}},
+    {{-0.5f,  0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}}
+};
+#define INDICES_COUNT 6
+const uint32_t indices[INDICES_COUNT] = {
+    0, 1, 2, 2, 3, 0
 };
 
 typedef struct QueueFamilyIndices {
@@ -115,6 +124,7 @@ void createSyncObjects();
 void recreateSwapchain();
 void clearupSwapchain();
 void createVertexBuffer();
+void createIndexBuffer();
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
@@ -149,11 +159,15 @@ void initVk() {
     createFramebuffers();
     createCommandPool();
     createVertexBuffer();
+    createIndexBuffer();
     createCommandBuffers();
     createSyncObjects();
 }
 void cleanVk() {
     clearupSwapchain();
+
+    vkDestroyBuffer(VULKAN.device, VULKAN.indexBuffer, NULL);
+    vkFreeMemory(VULKAN.device, VULKAN.indexBufferMemory, NULL);
 
     vkDestroyBuffer(VULKAN.device, VULKAN.vertexBuffer, NULL);
     vkFreeMemory(VULKAN.device, VULKAN.vertexBufferMemory, NULL);
@@ -935,6 +949,7 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VULKAN.pipeline);
 
+    // = VIEWPORTING AND SCISSORING =
     VkViewport viewport = {
         .x = 0.0f,
         .y = 0.0f,
@@ -950,12 +965,14 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         .extent = VULKAN.swapchainExtent
     };
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    // =============================
 
     VkBuffer vertexBuffers[] = { VULKAN.vertexBuffer };
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, VULKAN.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, INDICES_COUNT, 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -1020,7 +1037,7 @@ void clearupSwapchain() {
 }
 
 void createVertexBuffer() {
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * 3;
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * VERICES_COUNT;
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
@@ -1038,6 +1055,28 @@ void createVertexBuffer() {
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &VULKAN.vertexBuffer, &VULKAN.vertexBufferMemory);
 
     copyBuffer(stagingBuffer, VULKAN.vertexBuffer, bufferSize);
+
+    vkDestroyBuffer(VULKAN.device, stagingBuffer, NULL);
+    vkFreeMemory(VULKAN.device, stagingBufferMemory, NULL);
+}
+
+void createIndexBuffer() {
+    VkDeviceSize bufferSize = sizeof(indices[0]) * INDICES_COUNT;
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &stagingBuffer, &stagingBufferMemory);
+
+    void* data; // = malloc(bufferSize);
+    vkMapMemory(VULKAN.device, stagingBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, indices, bufferSize);
+    vkUnmapMemory(VULKAN.device, stagingBufferMemory);
+
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &VULKAN.indexBuffer, &VULKAN.indexBufferMemory);
+    copyBuffer(stagingBuffer, VULKAN.indexBuffer, bufferSize);
 
     vkDestroyBuffer(VULKAN.device, stagingBuffer, NULL);
     vkFreeMemory(VULKAN.device, stagingBufferMemory, NULL);

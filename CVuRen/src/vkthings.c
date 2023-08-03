@@ -63,6 +63,9 @@ static struct VULKAN {
     VkDeviceMemory* uniformBuffersMemory;
     void** uniformBuffersMapped;
 
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet* descriptorSets;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -137,6 +140,8 @@ void copyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer, VkDeviceSize size);
 void createDescriptorSetLayout();
 void createUniformBuffers();
 void updateUniformBuffer(uint32_t currentImage);
+void createDescriptorPool();
+void createDescriptorSets();
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -170,6 +175,8 @@ void initVk() {
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
 }
@@ -181,6 +188,7 @@ void cleanVk() {
         vkFreeMemory(VULKAN.device, VULKAN.uniformBuffersMemory[i], NULL);
     }
 
+    vkDestroyDescriptorPool(VULKAN.device, VULKAN.descriptorPool, NULL);
     vkDestroyDescriptorSetLayout(VULKAN.device, VULKAN.descriptorSetLayout, NULL);
 
     vkDestroyBuffer(VULKAN.device, VULKAN.indexBuffer, NULL);
@@ -755,7 +763,7 @@ void createGraphicsPipeline() {
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
         .depthBiasConstantFactor = 0.0f,
         .depthBiasClamp = 0.0f,
@@ -990,6 +998,9 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, VULKAN.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, VULKAN.pipelineLayout,
+        0, 1, &VULKAN.descriptorSets[VULKAN.currentFrame], 0, NULL);
 
     vkCmdDrawIndexed(commandBuffer, INDICES_COUNT, 1, 0, 0, 0);
 
@@ -1237,17 +1248,23 @@ void createUniformBuffers() {
 
 }
 
+bool firstTime = true;
 void updateUniformBuffer(uint32_t currentImage) {
     UniformBufferObject ubo = {
         GLM_MAT4_IDENTITY_INIT,GLM_MAT4_ZERO_INIT,GLM_MAT4_ZERO_INIT
     };
+    static mat4 s_model;
+    if (firstTime) { 
+        glm_mat4_copy(GLM_MAT4_IDENTITY, s_model);
+        firstTime = false;
+    }
 
     vec3 eye = { 2.0f, 2.0f, 2.0f };
     vec3 center = { 0.0f, 0.0f, 0.0f };
     vec3 up = { 0.0f, 0.0f, 1.0f };
-    float deg = (float) ((getTimeInNanoseconds() /1000 /1000 /10)%360) ;
     
-    glm_rotate_y(GLM_MAT4_IDENTITY, glm_rad(deg), ubo.model);
+    glm_rotate_z(s_model, glm_rad(3.0f), ubo.model);
+    glm_mat4_copy(ubo.model, s_model);
     glm_lookat(eye, center, up, ubo.view);
     glm_perspective(glm_rad(45.0f),
         (float)VULKAN.swapchainExtent.width / (float)VULKAN.swapchainExtent.height,
@@ -1256,6 +1273,64 @@ void updateUniformBuffer(uint32_t currentImage) {
     ubo.proj[1][1] *= -1;
 
     memcpy(VULKAN.uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
+void createDescriptorPool() {
+    VkDescriptorPoolSize poolSize = {
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = MAX_FRAMES_IN_FLIGHT
+    };
+
+    VkDescriptorPoolCreateInfo poolInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .maxSets = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize
+    };
+
+    if (vkCreateDescriptorPool(VULKAN.device, &poolInfo, NULL, &VULKAN.descriptorPool) != VK_SUCCESS) {
+        c_throw("failed to create descriptor pool");
+    };
+}
+
+void createDescriptorSets() {
+    VkDescriptorSetLayout layouts[2] = {VULKAN.descriptorSetLayout, VULKAN.descriptorSetLayout };
+
+    VkDescriptorSetAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = NULL,
+        .descriptorPool = VULKAN.descriptorPool,
+        .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+        .pSetLayouts = layouts
+    };
+
+    VULKAN.descriptorSets = malloc(sizeof(VkDescriptorSet) * MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(VULKAN.device, &allocInfo, VULKAN.descriptorSets) != VK_SUCCESS) {
+        c_throw("failed to allocate descriptor sets");
+    };
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        VkDescriptorBufferInfo bufferInfo = {
+            .buffer = VULKAN.uniformBuffers[i],
+            .offset = 0,
+            .range = sizeof(UniformBufferObject)
+        };
+        VkWriteDescriptorSet descriptorWrite = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = NULL,
+            .dstSet = VULKAN.descriptorSets[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo = NULL,
+            .pBufferInfo = &bufferInfo,
+            .pTexelBufferView = NULL
+        };
+        vkUpdateDescriptorSets(VULKAN.device, 1, &descriptorWrite, 0, NULL);
+    }
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

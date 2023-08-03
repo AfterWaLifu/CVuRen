@@ -3,6 +3,8 @@
 #include <vulkan/vulkan.h>
 #include "cglm/cglm.h"
 
+#include <stdalign.h>
+
 typedef struct Vertex {
 	vec3 pos;
 	vec4 color;
@@ -17,5 +19,5 @@ VkVertexInputBindingDescription getBindDescription();
 VertexAttribDescrStruct getAttributeDescriptions();
 
 typedef struct UniformBufferObject {
-	mat4 model, view, proj;
+	alignas(16) mat4 model, view, proj;
 } UniformBufferObject;

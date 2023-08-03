@@ -15,3 +15,7 @@ typedef struct VertexAttribDescrStruct {
 
 VkVertexInputBindingDescription getBindDescription();
 VertexAttribDescrStruct getAttributeDescriptions();
+
+typedef struct UniformBufferObject {
+	mat4 model, view, proj;
+} UniformBufferObject;

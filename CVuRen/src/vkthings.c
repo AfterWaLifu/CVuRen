@@ -38,6 +38,7 @@ static struct VULKAN {
     vkimageviews swapchainImageViews;
 
     VkRenderPass renderPass;
+    VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
     
@@ -58,6 +59,10 @@ static struct VULKAN {
     VkBuffer indexBuffer;
     VkDeviceMemory indexBufferMemory;
 
+    VkBuffer* uniformBuffers;
+    VkDeviceMemory* uniformBuffersMemory;
+    void** uniformBuffersMapped;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -74,10 +79,10 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 #define VERTICES_COUNT 4
 Vertex vertices[VERTICES_COUNT] = {
-    {{-0.5f, -0.5f, 0.0f},{1.0f, 0.0f, 0.0f,1.0f}},
-    {{ 0.5f, -0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}},
-    {{ 0.5f,  0.5f, 0.0f},{0.0f, 0.0f, 1.0f,1.0f}},
-    {{-0.5f,  0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}}
+    {{-0.5f, -0.5f, 0.5f},{1.0f, 0.0f, 0.0f,1.0f}},
+    {{ 0.5f, -0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}},
+    {{ 0.5f,  0.5f, 0.5f},{0.0f, 0.0f, 1.0f,1.0f}},
+    {{-0.5f,  0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}}
 };
 #define INDICES_COUNT 6
 const uint32_t indices[INDICES_COUNT] = {
@@ -129,6 +134,9 @@ uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
 void copyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer, VkDeviceSize size);
+void createDescriptorSetLayout();
+void createUniformBuffers();
+void updateUniformBuffer(uint32_t currentImage);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -155,16 +163,25 @@ void initVk() {
     createSwapChain();
     createImageViews();
     createRenderPass();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
     createVertexBuffer();
     createIndexBuffer();
+    createUniformBuffers();
     createCommandBuffers();
     createSyncObjects();
 }
 void cleanVk() {
     clearupSwapchain();
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vkDestroyBuffer(VULKAN.device, VULKAN.uniformBuffers[i], NULL);
+        vkFreeMemory(VULKAN.device, VULKAN.uniformBuffersMemory[i], NULL);
+    }
+
+    vkDestroyDescriptorSetLayout(VULKAN.device, VULKAN.descriptorSetLayout, NULL);
 
     vkDestroyBuffer(VULKAN.device, VULKAN.indexBuffer, NULL);
     vkFreeMemory(VULKAN.device, VULKAN.indexBufferMemory, NULL);
@@ -209,6 +226,8 @@ void drawFrame() {
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         c_throw("failed to acquire swapchain image");
     }
+
+    updateUniformBuffer(VULKAN.currentFrame);
 
     vkResetFences(VULKAN.device, 1, VULKAN.inFlightFence + VULKAN.currentFrame);
 
@@ -784,8 +803,8 @@ void createGraphicsPipeline() {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .setLayoutCount = 0,
-        .pSetLayouts = NULL,
+        .setLayoutCount = 1,
+        .pSetLayouts = &VULKAN.descriptorSetLayout,
         .pushConstantRangeCount = 0,
         .pPushConstantRanges = NULL 
     };
@@ -1179,6 +1198,64 @@ void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
     vkQueueWaitIdle(VULKAN.graphicsQueue);
 
     vkFreeCommandBuffers(VULKAN.device, VULKAN.commandPool, 1, &commandBuffer);
+}
+
+void createDescriptorSetLayout() {
+    VkDescriptorSetLayoutBinding uboLayoutBinding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL
+    };
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
+    };
+
+    if (vkCreateDescriptorSetLayout(VULKAN.device, &layoutInfo, NULL, &VULKAN.descriptorSetLayout) != VK_SUCCESS) {
+        c_throw("failed to create descriptor set layout");
+    }
+}
+
+void createUniformBuffers() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    VULKAN.uniformBuffers = malloc(sizeof(VkBuffer*) * MAX_FRAMES_IN_FLIGHT);
+    VULKAN.uniformBuffersMemory = malloc(sizeof(VkDeviceMemory*) * MAX_FRAMES_IN_FLIGHT);
+    VULKAN.uniformBuffersMapped = malloc(sizeof(void**) * MAX_FRAMES_IN_FLIGHT);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VULKAN.uniformBuffers+i, VULKAN.uniformBuffersMemory+i);
+        vkMapMemory(VULKAN.device, VULKAN.uniformBuffersMemory[i], 0, bufferSize, 0, VULKAN.uniformBuffersMapped + i);
+    }
+
+}
+
+void updateUniformBuffer(uint32_t currentImage) {
+    UniformBufferObject ubo = {
+        GLM_MAT4_IDENTITY_INIT,GLM_MAT4_ZERO_INIT,GLM_MAT4_ZERO_INIT
+    };
+
+    vec3 eye = { 2.0f, 2.0f, 2.0f };
+    vec3 center = { 0.0f, 0.0f, 0.0f };
+    vec3 up = { 0.0f, 0.0f, 1.0f };
+    float deg = (float) ((getTimeInNanoseconds() /1000 /1000 /10)%360) ;
+    
+    glm_rotate_y(GLM_MAT4_IDENTITY, glm_rad(deg), ubo.model);
+    glm_lookat(eye, center, up, ubo.view);
+    glm_perspective(glm_rad(45.0f),
+        (float)VULKAN.swapchainExtent.width / (float)VULKAN.swapchainExtent.height,
+        0.0f, 1.0f, ubo.proj);
+
+    ubo.proj[1][1] *= -1;
+
+    memcpy(VULKAN.uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

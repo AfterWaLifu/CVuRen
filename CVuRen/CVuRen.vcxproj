@@ -159,6 +159,7 @@
     <ClCompile Include="src\loop.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\utils\dynamic_array.c" />
+    <ClCompile Include="src\utils\stb_image_impl.c" />
     <ClCompile Include="src\utils\utils.c" />
     <ClCompile Include="src\vertexes.c" />
     <ClCompile Include="src\vkthings.c" />

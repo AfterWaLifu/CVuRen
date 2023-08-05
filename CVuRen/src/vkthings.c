@@ -70,6 +70,7 @@ static struct VULKAN {
     VkImage textureImage;
     VkDeviceMemory textureImageMemory;
     VkImageView textureImageView;
+    VkSampler textureSampler;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -156,6 +157,7 @@ void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayo
 void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 void createTextureImageView();
 VkImageView createImageView(VkImage image, VkFormat format);
+void createTextureSampler();
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -188,6 +190,7 @@ void initVk() {
     createCommandPool();
     createTextureImage();
     createTextureImageView();
+    createTextureSampler();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -199,6 +202,7 @@ void initVk() {
 void cleanVk() {
     clearupSwapchain();
 
+    vkDestroySampler(VULKAN.device, VULKAN.textureSampler, NULL);
     vkDestroyImageView(VULKAN.device, VULKAN.textureImageView, NULL);
     vkDestroyImage(VULKAN.device, VULKAN.textureImage, NULL);
     vkFreeMemory(VULKAN.device, VULKAN.textureImageMemory, NULL);
@@ -447,7 +451,7 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
     bool swapchainOk = (scsd.formatsCount > 0) && (scsd.presentModesCount>0);
 
     return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
-        qfi.itIs && deviceExtSupported && swapchainOk;
+        qfi.itIs && deviceExtSupported && swapchainOk && deviceFeatures.samplerAnisotropy;
 }
 
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
@@ -494,11 +498,10 @@ void createLogicalDevice() {
         queueCreateInfos[i].pQueuePriorities = &qPriority;
     }
 
-    VkPhysicalDeviceFeatures deviceFeatures = {
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-    };
+    VkPhysicalDeviceFeatures deviceFeatures;
+    memset(&deviceFeatures, 0, sizeof(VkPhysicalDeviceFeatures));
     deviceFeatures.logicOp = VK_TRUE;
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -1518,6 +1521,36 @@ VkImageView createImageView(VkImage image, VkFormat format) {
     }
 
     return imageView;
+}
+
+void createTextureSampler() {
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(VULKAN.physicalDevice, &properties);
+
+    VkSamplerCreateInfo samplerInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+        .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
+        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = VK_FALSE
+    };
+    
+    if (vkCreateSampler(VULKAN.device, &samplerInfo, NULL, &VULKAN.textureSampler) != VK_SUCCESS) {
+        c_throw("failed to create texture sampler");
+    }
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

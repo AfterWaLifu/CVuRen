@@ -69,6 +69,7 @@ static struct VULKAN {
 
     VkImage textureImage;
     VkDeviceMemory textureImageMemory;
+    VkImageView textureImageView;
 
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
@@ -153,6 +154,8 @@ VkCommandBuffer beginSingleTimeCommands();
 void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+void createTextureImageView();
+VkImageView createImageView(VkImage image, VkFormat format);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -184,6 +187,7 @@ void initVk() {
     createFramebuffers();
     createCommandPool();
     createTextureImage();
+    createTextureImageView();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -195,6 +199,7 @@ void initVk() {
 void cleanVk() {
     clearupSwapchain();
 
+    vkDestroyImageView(VULKAN.device, VULKAN.textureImageView, NULL);
     vkDestroyImage(VULKAN.device, VULKAN.textureImage, NULL);
     vkFreeMemory(VULKAN.device, VULKAN.textureImageMemory, NULL);
 
@@ -606,30 +611,8 @@ void createImageViews() {
         (VkImageView*)malloc(sizeof(VkImageView) * VULKAN.swapchainImageViews.count);
 
     for (uint32_t i = 0; i < VULKAN.swapchainImages.count; ++i) {
-        VkImageViewCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .image = VULKAN.swapchainImages.swapchainImages[i],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VULKAN.swapchainImageFormat,
-            .components = {
-                VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY,
-                VK_COMPONENT_SWIZZLE_IDENTITY,VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1
-            }
-        };
-
-        if (vkCreateImageView(VULKAN.device, &createInfo, NULL,
-            VULKAN.swapchainImageViews.swapChainImageViews+i) != VK_SUCCESS) {
-            c_throw("failed to create image views");
-        }
+        VULKAN.swapchainImageViews.swapChainImageViews[i] =
+            createImageView(VULKAN.swapchainImages.swapchainImages[i], VULKAN.swapchainImageFormat);
     }
 }
 
@@ -1505,6 +1488,36 @@ void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t 
         buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     endSingleTimeCommands(commandBuffer);
+}
+
+void createTextureImageView() {
+    VULKAN.textureImageView = createImageView(VULKAN.textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+VkImageView createImageView(VkImage image, VkFormat format) {
+    VkImageViewCreateInfo viewInfo = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .image = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format,
+        .components = {0,0,0,0},
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+            }
+    };
+
+    VkImageView imageView;
+    if (vkCreateImageView(VULKAN.device, &viewInfo, NULL, &imageView) != VK_SUCCESS) {
+        c_throw("failed to create texture image view");
+    }
+
+    return imageView;
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {

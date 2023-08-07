@@ -8,6 +8,7 @@
 typedef struct Vertex {
 	vec3 pos;
 	vec4 color;
+	vec3 texCoord;
 } Vertex;
 
 typedef struct VertexAttribDescrStruct {

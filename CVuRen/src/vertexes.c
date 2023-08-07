@@ -12,7 +12,7 @@ VkVertexInputBindingDescription getBindDescription() {
 
 VertexAttribDescrStruct getAttributeDescriptions() {
 	VertexAttribDescrStruct attributeDescriptions;
-	attributeDescriptions.count = 2;
+	attributeDescriptions.count = 3;
 	attributeDescriptions.descrs = malloc(sizeof(VkVertexInputAttributeDescription) * attributeDescriptions.count);
 
 	attributeDescriptions.descrs[0].location = 0;
@@ -24,6 +24,11 @@ VertexAttribDescrStruct getAttributeDescriptions() {
 	attributeDescriptions.descrs[1].binding = 0;
 	attributeDescriptions.descrs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	attributeDescriptions.descrs[1].offset = offsetof(Vertex, color);
+
+	attributeDescriptions.descrs[2].location = 2;
+	attributeDescriptions.descrs[2].binding = 0;
+	attributeDescriptions.descrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions.descrs[2].offset = offsetof(Vertex, texCoord);
 
 	return attributeDescriptions;
 }

@@ -88,10 +88,10 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 #define VERTICES_COUNT 4
 Vertex vertices[VERTICES_COUNT] = {
-    {{-0.5f, -0.5f, 0.5f},{1.0f, 0.0f, 0.0f,1.0f}},
-    {{ 0.5f, -0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}},
-    {{ 0.5f,  0.5f, 0.5f},{0.0f, 0.0f, 1.0f,1.0f}},
-    {{-0.5f,  0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}}
+    {{-0.5f, -0.5f, 0.5f},{1.0f, 0.0f, 0.0f,1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}, {0.0f, 0.0f, 0.0f}},
+    {{ 0.5f,  0.5f, 0.5f},{0.0f, 0.0f, 1.0f,1.0f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}, {1.0f, 1.0f, 0.0f}}
 };
 #define INDICES_COUNT 6
 const uint32_t indices[INDICES_COUNT] = {
@@ -1187,12 +1187,25 @@ void createDescriptorSetLayout() {
         .pImmutableSamplers = NULL
     };
 
+    VkDescriptorSetLayoutBinding samplerLayoutBinding = {
+        .binding = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .pImmutableSamplers = NULL
+    };
+
+    VkDescriptorSetLayoutBinding bindings[] = {
+        uboLayoutBinding,
+        samplerLayoutBinding
+    };
+
     VkDescriptorSetLayoutCreateInfo layoutInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding
+        .bindingCount = 2,
+        .pBindings = bindings
     };
 
     if (vkCreateDescriptorSetLayout(VULKAN.device, &layoutInfo, NULL, &VULKAN.descriptorSetLayout) != VK_SUCCESS) {
@@ -1243,9 +1256,15 @@ void updateUniformBuffer(uint32_t currentImage) {
 }
 
 void createDescriptorPool() {
-    VkDescriptorPoolSize poolSize = {
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = MAX_FRAMES_IN_FLIGHT
+    VkDescriptorPoolSize poolSizes[] = {
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = MAX_FRAMES_IN_FLIGHT
+        }
     };
 
     VkDescriptorPoolCreateInfo poolInfo = {
@@ -1253,8 +1272,8 @@ void createDescriptorPool() {
         .pNext = NULL,
         .flags = 0,
         .maxSets = MAX_FRAMES_IN_FLIGHT,
-        .poolSizeCount = 1,
-        .pPoolSizes = &poolSize
+        .poolSizeCount = 2,
+        .pPoolSizes = poolSizes
     };
 
     if (vkCreateDescriptorPool(VULKAN.device, &poolInfo, NULL, &VULKAN.descriptorPool) != VK_SUCCESS) {
@@ -1284,19 +1303,38 @@ void createDescriptorSets() {
             .offset = 0,
             .range = sizeof(UniformBufferObject)
         };
-        VkWriteDescriptorSet descriptorWrite = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext = NULL,
-            .dstSet = VULKAN.descriptorSets[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo = NULL,
-            .pBufferInfo = &bufferInfo,
-            .pTexelBufferView = NULL
+        VkDescriptorImageInfo imageInfo = {
+            .sampler = VULKAN.textureSampler,
+            .imageView = VULKAN.textureImageView,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
-        vkUpdateDescriptorSets(VULKAN.device, 1, &descriptorWrite, 0, NULL);
+        VkWriteDescriptorSet descriptorWrite[] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = NULL,
+                .dstSet = VULKAN.descriptorSets[i],
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pImageInfo = NULL,
+                .pBufferInfo = &bufferInfo,
+                .pTexelBufferView = NULL
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = NULL,
+                .dstSet = VULKAN.descriptorSets[i],
+                .dstBinding = 1,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &imageInfo,
+                .pBufferInfo = NULL,
+                .pTexelBufferView = NULL
+            }
+        };
+        vkUpdateDescriptorSets(VULKAN.device, 2, descriptorWrite, 0, NULL);
     }
 }
 

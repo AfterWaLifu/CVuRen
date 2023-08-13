@@ -1,5 +1,7 @@
 #pragma once
 
+#define CGLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include <vulkan/vulkan.h>
 #include "cglm/cglm.h"
 

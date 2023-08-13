@@ -72,6 +72,10 @@ static struct VULKAN {
     VkImageView textureImageView;
     VkSampler textureSampler;
 
+    VkImage depthImage;
+    VkDeviceMemory depthImageMemory;
+    VkImageView depthImageView;
+
     VkDebugUtilsMessengerEXT debugMessenger;
 } VULKAN;
 
@@ -86,16 +90,22 @@ const uint32_t deviceExtensionsCount = 1;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-#define VERTICES_COUNT 4
+#define VERTICES_COUNT 8
 Vertex vertices[VERTICES_COUNT] = {
     {{-0.5f, -0.5f, 0.5f},{1.0f, 0.0f, 0.0f,1.0f}, {1.0f, 0.0f, 0.0f}},
     {{ 0.5f, -0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}, {0.0f, 0.0f, 0.0f}},
     {{ 0.5f,  0.5f, 0.5f},{0.0f, 0.0f, 1.0f,1.0f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f,  0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}, {1.0f, 1.0f, 0.0f}}
+    {{-0.5f,  0.5f, 0.5f},{0.0f, 1.0f, 0.0f,1.0f}, {1.0f, 1.0f, 0.0f}},
+
+    {{-0.5f, -0.5f, 0.0f},{1.0f, 0.0f, 0.0f,1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}, {0.0f, 0.0f, 0.0f}},
+    {{ 0.5f,  0.5f, 0.0f},{0.0f, 0.0f, 1.0f,1.0f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f, 0.0f},{0.0f, 1.0f, 0.0f,1.0f}, {1.0f, 1.0f, 0.0f}}
 };
-#define INDICES_COUNT 6
+#define INDICES_COUNT 12
 const uint32_t indices[INDICES_COUNT] = {
-    0, 1, 2, 2, 3, 0
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4
 };
 
 typedef struct QueueFamilyIndices {
@@ -156,8 +166,13 @@ void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 void createTextureImageView();
-VkImageView createImageView(VkImage image, VkFormat format);
+VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 void createTextureSampler();
+void createDepthResources();
+VkFormat findSupportedFormat(const VkFormat* candidates, uint32_t candidatesCount,
+    VkImageTiling tiling, VkFormatFeatureFlags features);
+VkFormat findDepthFormat();
+bool hasStancilComponent(VkFormat format);
 
 static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -186,8 +201,9 @@ void initVk() {
     createRenderPass();
     createDescriptorSetLayout();
     createGraphicsPipeline();
-    createFramebuffers();
     createCommandPool();
+    createDepthResources();
+    createFramebuffers();
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
@@ -615,7 +631,7 @@ void createImageViews() {
 
     for (uint32_t i = 0; i < VULKAN.swapchainImages.count; ++i) {
         VULKAN.swapchainImageViews.swapChainImageViews[i] =
-            createImageView(VULKAN.swapchainImages.swapchainImages[i], VULKAN.swapchainImageFormat);
+            createImageView(VULKAN.swapchainImages.swapchainImages[i], VULKAN.swapchainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 }
 
@@ -631,10 +647,26 @@ void createRenderPass() {
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
     };
+    VkAttachmentDescription depthAttachment = {
+        .flags = 0,
+        .format = findDepthFormat(),
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+    VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
 
     VkAttachmentReference colorAttachmentRef = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+    VkAttachmentReference depthAttachmentRef = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
 
     VkSubpassDescription subpass = {
@@ -645,7 +677,7 @@ void createRenderPass() {
         .colorAttachmentCount = 1,
         .pColorAttachments = &colorAttachmentRef,
         .pResolveAttachments = NULL,
-        .pDepthStencilAttachment = NULL,
+        .pDepthStencilAttachment = &depthAttachmentRef,
         .preserveAttachmentCount = 0,
         .pPreserveAttachments = NULL
     };
@@ -653,10 +685,10 @@ void createRenderPass() {
     VkSubpassDependency dependency = {
         .srcSubpass = VK_SUBPASS_EXTERNAL,
         .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
         .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         .dependencyFlags = 0
     };
 
@@ -664,8 +696,8 @@ void createRenderPass() {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .attachmentCount = 1,
-        .pAttachments = &colorAttachment,
+        .attachmentCount = 2,
+        .pAttachments = attachments,
         .subpassCount = 1,
         .pSubpasses = &subpass,
         .dependencyCount = 1,
@@ -808,6 +840,21 @@ void createGraphicsPipeline() {
         .blendConstants = {0.0f,0.0f,0.0f,0.0f}
     };
 
+    VkPipelineDepthStencilStateCreateInfo depthStencil = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_TRUE,
+        .front = {0,0,0,0,0,0,0},
+        .back = {0,0,0,0,0,0,0},
+        .minDepthBounds = 0.0f,
+        .maxDepthBounds = 1.0f
+    };
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = NULL,
@@ -835,7 +882,7 @@ void createGraphicsPipeline() {
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = NULL,
+        .pDepthStencilState = &depthStencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = VULKAN.pipelineLayout,
@@ -899,7 +946,8 @@ void createFramebuffers() {
 
     for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
         VkImageView attachments[] = {
-            VULKAN.swapchainImageViews.swapChainImageViews[i]
+            VULKAN.swapchainImageViews.swapChainImageViews[i],
+            VULKAN.depthImageView
         };
 
         VkFramebufferCreateInfo framebufferInfo = {
@@ -907,7 +955,7 @@ void createFramebuffers() {
             .pNext = NULL,
             .flags = 0,
             .renderPass = VULKAN.renderPass,
-            .attachmentCount = 1,
+            .attachmentCount = 2,
             .pAttachments = attachments,
             .width = VULKAN.swapchainExtent.width,
             .height = VULKAN.swapchainExtent.height,
@@ -960,7 +1008,10 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         c_throw("failed to begin a command buffer");
     }
 
-    VkClearValue clearColor = {{{0.0f,0.0f,0.0f,1.0f}}};
+    VkClearValue clearColor[] = {
+        {.color = {0.0f,0.0f,0.0f,1.0f},.depthStencil = {0.0f, 0}},
+        {.color = {0.0f,0.0f,0.0f,0.0f},.depthStencil = {1.0f, 0}}
+    };
     VkRenderPassBeginInfo renderPassInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext = NULL,
@@ -970,8 +1021,8 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
             .offset = {0,0},
             .extent = VULKAN.swapchainExtent
         },
-        .clearValueCount = 1,
-        .pClearValues = &clearColor,
+        .clearValueCount = 2,
+        .pClearValues = clearColor,
     };
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1052,10 +1103,15 @@ void recreateSwapchain() {
 
     createSwapChain();
     createImageViews();
+    createDepthResources();
     createFramebuffers();
 }
 
 void clearupSwapchain() {
+    vkDestroyImageView(VULKAN.device, VULKAN.depthImageView, NULL);
+    vkDestroyImage(VULKAN.device, VULKAN.depthImage, NULL);
+    vkFreeMemory(VULKAN.device, VULKAN.depthImageMemory, NULL);
+
     for (size_t i = 0; i < VULKAN.swapchainFramebuffers.count; ++i) {
         vkDestroyFramebuffer(VULKAN.device, VULKAN.swapchainFramebuffers.f[i], NULL);
     }
@@ -1486,6 +1542,15 @@ void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayo
 
     VkPipelineStageFlags srcStage, dstStage;
 
+    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (hasStancilComponent(format)) {
+            barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+    } else {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
     if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -1496,6 +1561,11 @@ void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayo
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     } else {
         c_throw("unsupported layour transition");
     }
@@ -1532,10 +1602,10 @@ void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t 
 }
 
 void createTextureImageView() {
-    VULKAN.textureImageView = createImageView(VULKAN.textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+    VULKAN.textureImageView = createImageView(VULKAN.textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-VkImageView createImageView(VkImage image, VkFormat format) {
+VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
     VkImageViewCreateInfo viewInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext = NULL,
@@ -1545,7 +1615,7 @@ VkImageView createImageView(VkImage image, VkFormat format) {
         .format = format,
         .components = {0,0,0,0},
         .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = aspectFlags,
             .baseMipLevel = 0,
             .levelCount = 1,
             .baseArrayLayer = 0,
@@ -1589,6 +1659,43 @@ void createTextureSampler() {
     if (vkCreateSampler(VULKAN.device, &samplerInfo, NULL, &VULKAN.textureSampler) != VK_SUCCESS) {
         c_throw("failed to create texture sampler");
     }
+}
+
+void createDepthResources() {
+    VkFormat depthFormat = findDepthFormat();
+    createImage(VULKAN.swapchainExtent.width, VULKAN.swapchainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &VULKAN.depthImage, &VULKAN.depthImageMemory);
+    VULKAN.depthImageView = createImageView(VULKAN.depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    transitionImageLayout(VULKAN.depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+}
+
+VkFormat findSupportedFormat(const VkFormat* candidates, uint32_t candidatesCount,
+    VkImageTiling tiling, VkFormatFeatureFlags features) {
+    for (uint32_t i = 0; i < candidatesCount; ++i) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(VULKAN.physicalDevice, candidates[i], &props);
+
+        if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+            return candidates[i];
+        } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+            return candidates[i];
+        }
+    }
+    c_throw("failed to find supported format");
+    return VK_FORMAT_MAX_ENUM;
+}
+
+VkFormat findDepthFormat() {
+    VkFormat cands[] = { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT };
+    return findSupportedFormat(
+        cands, 3,
+        VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+}
+
+bool hasStancilComponent(VkFormat format) {
+    return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
